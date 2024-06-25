@@ -197,11 +197,10 @@ namespace Barrel
         }
 
 
-        static string getRandomString(int length)
+        static string getRandomString(int length, Random random)
         {
             const string chars = "abcdefghijklmnopqrstuvwxyz0123456789";
             System.Text.StringBuilder stringBuilder = new System.Text.StringBuilder();
-            Random random = new Random();
             for (int i = 0; i < length; i++)
             {
                 int index = random.Next(chars.Length);
@@ -243,9 +242,10 @@ namespace Barrel
         static void Main(string[] args)
         {
             Console.WriteLine("3 - Barrel");
+            Random random = new Random();
 
             // Create directory for all dump files
-            string path_ = @"" + getRandomString(5) + "\\";
+            string path_ = @"" + getRandomString(5, random) + "\\";
             if (!System.IO.Directory.Exists(path_))
             {
                 System.IO.Directory.CreateDirectory(path_);
@@ -298,10 +298,10 @@ namespace Barrel
                     byte[] buffer = new byte[(int)mbi.RegionSize];
                     NtReadVirtualMemory(processHandle, mbi.BaseAddress, buffer, (int)mbi.RegionSize, out _);
                     // Create dump file for this region
-                    string memdump_filename = getRandomString(10) + "." + getRandomString(3);
+                    string memdump_filename = getRandomString(10, random) + "." + getRandomString(3, random);
                     WriteToFile(buffer, (int)mbi.RegionSize, (path_ + memdump_filename));
                     // Add to JSON file                    
-                    string[] aux_array_2 = { memdump_filename, "0x" + aux_address.ToString("X") };
+                    string[] aux_array_2 = { memdump_filename, "0x" + aux_address.ToString("X"), mbi.RegionSize.ToString() };
                     aux_array_1 = aux_array_1.Concat(new string[] { ToJson(aux_array_2) }).ToArray();
                 }
                 // Next memory region
