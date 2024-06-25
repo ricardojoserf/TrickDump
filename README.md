@@ -1,19 +1,29 @@
 # TrickDump
 
-Dump the lsass process without generating a Minidump file in the victim system in three steps: 
+TrickDump allows to dump the lsass process without generating a Minidump file. The attack is executed in three steps and these programs generate JSON and dump files for each memory region: 
+
 - **Lock**: Get OS information using RtlGetVersion.
+
 - **Shock**: Get SeDebugPrivilege with NtOpenProcessToken and NtAdjustPrivilegeToken, open a handle with NtOpenProcess and then get modules information using NtQueryInformationProcess and NtReadVirtualMemory.
+
 - **Barrel**: Get SeDebugPrivilege, open a handle and then get information and dump memory regions using NtQueryVirtualMemory and NtReadVirtualMemory.
 
 ![img](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/trickdump.drawio.png)
 
-The benefits of this technique are that there is never a valid Minidump file in disk, memory or the network traffic; there is not a single program or process executing the attack but three, which may raise less flags; and these programs only use NTAPIS, as this project is a variant of [NativeDump](https://github.com/ricardojoserf/NativeDump).
 
-Use the *create_dump.py* script to generate the Minidump file in your attack system:
+Then use the *create_dump.py* script to generate the Minidump file in the attack system:
 
 ```
 python3 create_dump.py -d MEMDUMPS_DIRECTORY [-l LOCK_FILE] [-s SHOCK_FILE] [-b BARREL_FILE] [-o OUTPUT_FILE] 
 ```
+
+The benefits of this technique are:
+
+- There is never a valid Minidump file in disk, memory or the network traffic.
+
+- There is not a single program or process executing the whole attack but three separate ones, which may raise less flags.
+
+- The programs only use NTAPIS (this project is a variant of [NativeDump](https://github.com/ricardojoserf/NativeDump)).
 
 -------------------------
 
