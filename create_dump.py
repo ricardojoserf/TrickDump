@@ -24,7 +24,7 @@ def read_binary_file(file_path):
 def get_dump_bytearr(lock_json, shock_json, barrel_json, mem_directory):
 	# Calculations
 	number_modules = str(len(shock_json))
-	modulelist_size = 4 # size of 
+	modulelist_size = 4
 	modulelist_size += 108*int(number_modules)
 	for module in shock_json:
 		module_fullpath_len = len(module.get("field1"))
@@ -40,11 +40,11 @@ def get_dump_bytearr(lock_json, shock_json, barrel_json, mem_directory):
 	print("[+] Mem64List size: \t\t" + str(mem64list_size))
 
 	# Header
-	header  = b'\x4d\x44\x4d\x50' 		 # Signature
-	header += b'\x93\xa7' 				 # Version
-	header += b'\x00\x00' 				 # ImplementationVersion
-	header += b'\x03\x00\x00\x00' 		 # NumberOfStreams
-	header += b'\x20\x00\x00\x00' 		 # StreamDirectoryRva
+	header  = b'\x4d\x44\x4d\x50' # Signature
+	header += b'\x93\xa7' # Version
+	header += b'\x00\x00' # ImplementationVersion
+	header += b'\x03\x00\x00\x00' # NumberOfStreams
+	header += b'\x20\x00\x00\x00' # StreamDirectoryRva
 	header += b'\x00'*(32 - len(header)) # Other fields
 
 	# Stream Directory
@@ -80,9 +80,9 @@ def get_dump_bytearr(lock_json, shock_json, barrel_json, mem_directory):
 
 	for module in shock_json:
 		modulelist_stream += int(module.get("field2"),16).to_bytes(8, 'little') # Module Address
-		modulelist_stream += int(module.get("field3")).to_bytes(8, 'little')    # Module Size
+		modulelist_stream += int(module.get("field3")).to_bytes(8, 'little') # Module Size
 		modulelist_stream += b'\x00'*4
-		modulelist_stream += pointer_index.to_bytes(8, 'little')                # Pointer to unicode string
+		modulelist_stream += pointer_index.to_bytes(8, 'little') # Pointer to unicode string
 		full_path = module.get("field1")
 		pointer_index += len(full_path)*2 + 8
 		modulelist_stream += b'\x00'*(108-(8+8+4+8))
