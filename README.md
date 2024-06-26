@@ -1,6 +1,6 @@
 # TrickDump
 
-TrickDump allows to dump the lsass process without generating a Minidump file. The attack is executed in three steps and these programs generate JSON and dump files for each memory region: 
+TrickDump allows to dump the lsass process without generating a Minidump file. The attack is executed in three steps and these programs generate JSON and memory dump file(s): 
 
 - **Lock**: Get OS information using RtlGetVersion.
 
@@ -14,7 +14,7 @@ TrickDump allows to dump the lsass process without generating a Minidump file. T
 Then use the *create_dump.py* script to generate the Minidump file in the attack system:
 
 ```
-python3 create_dump.py -d MEMDUMPS_DIRECTORY [-l LOCK_FILE] [-s SHOCK_FILE] [-b BARREL_FILE] [-o OUTPUT_FILE] 
+python3 create_dump.py -m MEMORY_FILES [-l LOCK_FILE] [-s SHOCK_FILE] [-b BARREL_FILE] [-o OUTPUT_FILE] 
 ```
 
 The benefits of this technique are:
