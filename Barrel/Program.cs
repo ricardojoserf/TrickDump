@@ -330,7 +330,7 @@ namespace Barrel
                 Console.WriteLine("[+] File created at " + mem_name);
             }
             else {
-                Console.WriteLine("[+] Files created at " + path_);
+                Console.WriteLine("[+] Files created at directory " + path_);
             }
         }
 
@@ -338,7 +338,7 @@ namespace Barrel
         static void Main(string[] args)
         {
             // Replace ntdll library
-            string option = "default";
+            string option = "";
             string wildcard_option = "";
             if (args.Length >= 1)
             {
@@ -352,9 +352,10 @@ namespace Barrel
 
             // big_file = true  -> Generate one big file with the dump of all memory regions together
             // big_file = false -> Create a directory with a random name and generate one dump file for each region
-            bool big_file = true;
+            bool big_file = false;
 
-            // Get Mem64List information + Dump memory regions. Arguments: Name of JSON file; name of directory/file to contain memory dumps
+            // Get Mem64List information + Dump memory regions
+            // Arguments: Name of JSON file; name of directory/file to contain memory dumps
             Barrel("barrel.json", "", big_file);
         }
     }
