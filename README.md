@@ -25,11 +25,17 @@ The benefits of this technique are:
 
 - The programs only use NTAPIS (this project is a variant of [NativeDump](https://github.com/ricardojoserf/NativeDump)).
 
+- Each program allows to overwrite the ntdll.dll library ".text" section to bypass API hooking:
+  - "disk": Using a DLL already on disk. If a second argument is not used the path is "C:\Windows\System32\ntdll.dll".
+  - "knowndlls": Using the KnownDlls folder.
+  - "debugproc": Using a process created in debug mode. If a second argument is not used the process is "c:\windows\system32\calc.exe".
+  - "download": Using a URL to download the file.
+
 -------------------------
 
 ## Example
 
-The programs are executed in the victim system which create the three JSON files and a directory with each memory region dump:
+The programs are executed in the victim system which create the three JSON files. In this case ntdll.dll is not overwritten and the Barrel.exe program has the "big_file" boolean value set to True, so the program creates only one file with all the dumped memory regions:
 
 ![img](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_1.png)
 
@@ -37,3 +43,10 @@ After exfiltrating the files, the Minidump file is generated:
 
 ![img](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_2.png)
 
+Now the programs are executed with a different ntdll.dll overwrite technique each. The Barrel.exe program has the "big_file" boolean value set to False, so the program creates a directory and one dump file per memory region inside:
+
+![img](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_3.png)
+
+The Minidump file is generated using the only mandatory argument, *-m*, which indicates the path to the memory file or the directory with all region dumps:
+
+![img](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_4.png)
