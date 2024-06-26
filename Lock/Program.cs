@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Runtime.InteropServices;
+using static Lock.NT;
 
 
 namespace Lock
@@ -62,19 +63,37 @@ namespace Lock
         static void WriteToFile(string path, string content)
         {
             System.IO.File.WriteAllText(path, content);
-            Console.WriteLine("[+] JSON file generated.");
+            Console.WriteLine("[+] File " + path + " generated.");
         }
 
 
-        static void Main(string[] args)
-        {
-            Console.WriteLine("1 - Lock");
+        static void Lock(string file_name) {
             OSVERSIONINFOEX osVersionInfo = getBuildNumber();
             string[] aux_array = { osVersionInfo.dwMajorVersion.ToString(), osVersionInfo.dwMinorVersion.ToString(), osVersionInfo.dwBuildNumber.ToString() };
             string aux_array_json = ToJson(aux_array);
             string[] aux_array_1 = { aux_array_json };
             string lock_json_content = ToJsonArray(aux_array_1);
-            WriteToFile("lock.json", lock_json_content);
+            WriteToFile(file_name, lock_json_content);
+        }
+
+
+        static void Main(string[] args)
+        {
+            // Replace ntdll library
+            string option = "default";
+            string wildcard_option = "";
+            if (args.Length >= 1)
+            {
+                option = args[0];
+            }
+            if (args.Length >= 2)
+            {
+                wildcard_option = args[1];
+            }
+            ReplaceLibrary(option, wildcard_option);
+
+            // Get OS information. Argument: Name of JSON file
+            Lock("lock.json");
         }
     }
 }

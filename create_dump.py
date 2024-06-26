@@ -9,7 +9,7 @@ def get_args():
 	parser.add_argument('-l', '--lock', required=False, default='lock.json', action='store', help='File path for lock.json')
 	parser.add_argument('-s', '--shock', required=False, default='shock.json', action='store', help='File path for shock.json')
 	parser.add_argument('-b', '--barrel', required=False, default='barrel.json', action='store', help='File path for barrel.json')
-	parser.add_argument('-d', '--directory', required=True, action='store', help='Directory with the regions memory dumps')
+	parser.add_argument('-m', '--memory_files', required=True, action='store', help='Directory with the regions memory dumps')
 	parser.add_argument('-o', '--output_file', required=False, default='oogie.dmp', action='store', help='Dump file name')
 	my_args = parser.parse_args()
 	return my_args
@@ -21,7 +21,7 @@ def read_binary_file(file_path):
     return byte_array
 
 
-def get_dump_bytearr(lock_json, shock_json, barrel_json, mem_directory):
+def get_dump_bytearr(lock_json, shock_json, barrel_json, memory_files):
 	# Calculations
 	number_modules = str(len(shock_json))
 	modulelist_size = 4
@@ -103,10 +103,17 @@ def get_dump_bytearr(lock_json, shock_json, barrel_json, mem_directory):
 
 	# Add memory regions
 	memory_bytearr = b''
-	for mem64 in barrel_json:
-		file_path = mem_directory + mem64.get("field0")
-		region_bytearr = read_binary_file(file_path)
+	if not os.path.isfile(memory_files):
+		print("[+] Processing files in directory " + memory_files)
+		for mem64 in barrel_json:
+			file_path = memory_files + mem64.get("field0")
+			region_bytearr = read_binary_file(file_path)
+			memory_bytearr += region_bytearr
+	else:
+		print("[+] Processing file " + memory_files)
+		region_bytearr = read_binary_file(memory_files)
 		memory_bytearr += region_bytearr
+
 
 	dump_file = header + stream_directory + systeminfo_stream + modulelist_stream + memory64list_stream + memory_bytearr
 	return dump_file
@@ -134,7 +141,7 @@ def main():
 	lock_file = args.lock
 	shock_file = args.shock
 	barrel_file = args.barrel
-	mem_directory = args.directory
+	memory_files = args.memory_files
 	output_file = args.output_file
 
 	show_banner()
@@ -156,11 +163,11 @@ def main():
 	else:
 		print("[-] File " + barrel_file + " not found")
 		sys.exit(0)
-	if not os.path.exists(mem_directory):
-		print("[-] Directory " + mem_directory + " not found")
+	if not os.path.exists(memory_files):
+		print("[-] File or Directory " + memory_files + " not found")
 		sys.exit(0)
 
-	dump_file = get_dump_bytearr(lock_json, shock_json, barrel_json, mem_directory)
+	dump_file = get_dump_bytearr(lock_json, shock_json, barrel_json, memory_files)
 	create_file(output_file, dump_file)
 	print("[+] Dump file " + output_file + " created ")
 
