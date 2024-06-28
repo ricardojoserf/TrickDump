@@ -1,12 +1,12 @@
 # TrickDump
 
-TrickDump allows to dump the lsass process without generating a Minidump file. The attack is executed in three steps and these programs generate JSON and memory dump file(s): 
+TrickDump allows to dump the lsass process without generating a Minidump file. The attack is executed in three steps and these programs generate JSON and memory dump files: 
 
 - **Lock**: Get OS information using RtlGetVersion.
 
-- **Shock**: Get SeDebugPrivilege with NtOpenProcessToken and NtAdjustPrivilegeToken, open a handle with NtOpenProcess and then get modules information using NtQueryInformationProcess and NtReadVirtualMemory.
+- **Shock**: Open a process handle with NtOpenProcess and get modules information using NtQueryInformationProcess and NtReadVirtualMemory.
 
-- **Barrel**: Get SeDebugPrivilege, open a handle and then get information and dump memory regions using NtQueryVirtualMemory and NtReadVirtualMemory.
+- **Barrel**: Open a process handle with NtOpenProcess and get information and dump memory regions using NtQueryVirtualMemory and NtReadVirtualMemory. By default it generates one dump file per memory region but you can create one file with all regions changing the "big_file" boolean value to True in the Main function. 
 
 ![img](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/trickdump.drawio.png)
 
