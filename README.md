@@ -31,6 +31,11 @@ The benefits of this technique are:
   - "debugproc": Using a process created in debug mode. If a second argument is not used the process is "c:\windows\system32\calc.exe".
   - "download": Using a URL to download the file.
 
+It comes in two flavours:
+
+- .NET: The main branch
+- Python: The [python-flavour branch](https://github.com/ricardojoserf/TrickDump/tree/python-flavour)
+
 -------------------------
 
 ## Example
