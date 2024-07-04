@@ -238,8 +238,8 @@ def update_json_array(data, name_to_update, field_to_update, new_value):
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-o', '--option', required=False, default="", action='store', help='Option for library overwrite')
-    parser.add_argument('-p', '--path', required=False, default="", action='store', help='Path (file in disk or program to open in debug mode)')
+    parser.add_argument('-o', '--option', required=True, action='store', help='Option for library overwrite: \"disk\", \"knowndlls\" or \"debugproc\"')
+    parser.add_argument('-p', '--path', required=False, default="", action='store', help='Path to ntdll file in disk (for \"disk\" option) or program to open in debug mode (\"debugproc\" option)')
     my_args = parser.parse_args()
     return my_args
 

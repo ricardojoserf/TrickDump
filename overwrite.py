@@ -238,14 +238,14 @@ def replace_ntdll_section(unhooked_ntdll_text, local_ntdll_txt, local_ntdll_txt_
     # VirtualProtect to PAGE_EXECUTE_WRITECOPY
     old_protection = wintypes.DWORD() 
     vp_bool = VirtualProtect(local_ntdll_txt, local_ntdll_txt_size, PAGE_EXECUTE_WRITECOPY, ctypes.byref(old_protection))
-    print("[+] Virtual Protect result: \t" + str(vp_bool))
+    #print("[+] Virtual Protect result: \t" + str(vp_bool))
     ### input("1")
     # Copy bytes
     ctypes.memmove(local_ntdll_txt, unhooked_ntdll_text, local_ntdll_txt_size)
     #### input("2")
     # VirtualProtect back to PAGE_EXECUTE_READ
     vp_bool = VirtualProtect(local_ntdll_txt, local_ntdll_txt_size, old_protection, ctypes.byref(old_protection))
-    print("[+] Virtual Protect result: \t" + str(vp_bool))
+    #print("[+] Virtual Protect result: \t" + str(vp_bool))
 
 
 def create_unicode_string(string):
@@ -257,35 +257,36 @@ def create_unicode_string(string):
 
 
 def overwrite_disk(path):
-    print("[+] Overwriting from disk file " + path)
+    #print("[+] Overwriting from disk file " + path)
     file_handle = wintypes.HANDLE()
     # CreateFileA
     file_handle = CreateFileA(path.encode('utf-8'), GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0)
-    print("[+] File handle:\t\t" + str(file_handle))
+    #print("[+] File handle:\t\t" + str(file_handle))
     # CreateFileMappingA
     mapping_handle =  CreateFileMappingA(file_handle, 0, PAGE_READONLY | SEC_IMAGE_NO_EXECUTE, 0, 0, None)
-    print("[+] Mapping handle:\t\t" + str(mapping_handle))
+    #print("[+] Mapping handle:\t\t" + str(mapping_handle))
     # MapViewOfFile
     unhooked_ntdll = MapViewOfFile(mapping_handle, FILE_MAP_READ, 0, 0, 0)
-    print("[+] Map view:\t\t\t" + hex(unhooked_ntdll))
+    #print("[+] Map view:\t\t\t" + hex(unhooked_ntdll))
     #CloseHandle
     createfile_ch = CloseHandle(file_handle)
     createfilemapping_ch = CloseHandle(mapping_handle)
-    print("[+] Closing file handle: \t" + str(createfile_ch))
-    print("[+] Closing mapping handle: \t" + str(createfilemapping_ch))
+    #print("[+] Closing file handle: \t" + str(createfile_ch))
+    #print("[+] Closing mapping handle: \t" + str(createfilemapping_ch))
     # Replace
     unhooked_ntdll_text = unhooked_ntdll + offset_mappeddll
-    print("[+] Mapped Ntdll Handle .Text:\t" + hex(unhooked_ntdll_text))
+    #print("[+] Mapped Ntdll Handle .Text:\t" + hex(unhooked_ntdll_text))
     local_ntdll = get_local_lib_address("ntdll.dll")
-    print("[+] Local Ntdll Handle:\t\t" + hex(local_ntdll))
+    #print("[+] Local Ntdll Handle:\t\t" + hex(local_ntdll))
     local_ntdll_txt_addr, local_ntdll_txt_size = get_section_info(local_ntdll)
     local_ntdll_txt = local_ntdll + local_ntdll_txt_addr
-    print("[+] Local Ntdll Text Section: \t" + hex(local_ntdll_txt))
+    #print("[+] Local Ntdll Text Section: \t" + hex(local_ntdll_txt))
+    print("[+] Copying " + str(local_ntdll_txt_size) + " bytes from " + hex(unhooked_ntdll_text) + " to " + hex(local_ntdll_txt))
     replace_ntdll_section(unhooked_ntdll_text, local_ntdll_txt, local_ntdll_txt_size)
 
 
 def overwrite_knowndlls():
-    print("[+] Overwriting using KnownDlls folder")
+    #print("[+] Overwriting using KnownDlls folder")
     # NtOpenSection
     section_name = "\\KnownDlls\\ntdll.dll"
     section_handle = wintypes.HANDLE()
@@ -300,26 +301,27 @@ def overwrite_knowndlls():
     status = NtOpenSection(ctypes.byref(section_handle), SECTION_MAP_READ, ctypes.byref(object_attributes))
     if status != 0:
         print("[-] NtOpenSection error code:\t\t" + str(status))
-    print("[+] Section handle: \t\t" + str(section_handle.value))
+    #print("[+] Section handle: \t\t" + str(section_handle.value))
     # MapViewOfFile
     unhooked_ntdll = MapViewOfFile(section_handle, SECTION_MAP_READ, 0, 0, 0)
-    print("[+] Map view:\t\t\t" + hex(unhooked_ntdll))
+    #print("[+] Map view:\t\t\t" + hex(unhooked_ntdll))
     # CloseHandle
     opensection_ch = CloseHandle(section_handle)
-    print("[+] Closing file handle: \t" + str(opensection_ch))
+    #print("[+] Closing file handle: \t" + str(opensection_ch))
     # Replace
     unhooked_ntdll_text = unhooked_ntdll + offset_mappeddll
-    print("[+] Mapped Ntdll Handle .Text:\t" + hex(unhooked_ntdll_text))
+    #print("[+] Mapped Ntdll Handle .Text:\t" + hex(unhooked_ntdll_text))
     local_ntdll = get_local_lib_address("ntdll.dll")
-    print("[+] Local Ntdll Handle:\t\t" + hex(local_ntdll))
+    #print("[+] Local Ntdll Handle:\t\t" + hex(local_ntdll))
     local_ntdll_txt_addr, local_ntdll_txt_size = get_section_info(local_ntdll)
     local_ntdll_txt = local_ntdll + local_ntdll_txt_addr
-    print("[+] Local Ntdll Text Section: \t" + hex(local_ntdll_txt))
+    #print("[+] Local Ntdll Text Section: \t" + hex(local_ntdll_txt))
+    print("[+] Copying " + str(local_ntdll_txt_size) + " bytes from " + hex(unhooked_ntdll_text) + " to " + hex(local_ntdll_txt))
     replace_ntdll_section(unhooked_ntdll_text, local_ntdll_txt, local_ntdll_txt_size)
 
 
 def overwrite_debugproc(path):
-    print("[+] Overwriting from debug process " + path)
+    #print("[+] Overwriting from debug process " + path)
     # CreateProcess
     startup_info = STARTUPINFO()
     process_info = PROCESS_INFORMATION()
@@ -338,14 +340,14 @@ def overwrite_debugproc(path):
     )
     if not success:
         print("[-] CreateProcess error code " + str(success))
-    print("[+] CreateProcess code: \t" + str(success))
+    #print("[+] CreateProcess code: \t" + str(success))
 
     # Local process
     local_ntdll = get_local_lib_address("ntdll.dll")
-    print("[+] Local Ntdll Handle:\t\t" + hex(local_ntdll))
+    #print("[+] Local Ntdll Handle:\t\t" + hex(local_ntdll))
     local_ntdll_txt_addr, local_ntdll_txt_size = get_section_info(local_ntdll)
     local_ntdll_txt = local_ntdll + local_ntdll_txt_addr
-    print("[+] Local Ntdll Text Section: \t" + hex(local_ntdll_txt))
+    #print("[+] Local Ntdll Text Section: \t" + hex(local_ntdll_txt))
     
     # NtReadVirtualMemory
     # debugged_process ntdll_handle = local ntdll_handle --> debugged_process .text section ntdll_handle = local .text section ntdll_handle
@@ -356,8 +358,9 @@ def overwrite_debugproc(path):
         print("[-] Error calling NtReadVirtualMemory " + status)
     # DebugActiveProcessStop
     daps_bool = DebugActiveProcessStop(process_info.dwProcessId)
-    print("[+] DebugActiveProcStop result:\t" + str(daps_bool))
+    #print("[+] DebugActiveProcStop result:\t" + str(daps_bool))
     # TerminateProcess
     tp_bool = TerminateProcess(process_info.hProcess, 0)
-    print("[+] TerminateProcess result:\t" + str(tp_bool))
+    #print("[+] TerminateProcess result:\t" + str(tp_bool))
+    print("[+] Copying " + str(local_ntdll_txt_size) + " bytes to " + hex(local_ntdll_txt))
     replace_ntdll_section(buffer.raw, local_ntdll_txt, local_ntdll_txt_size)
