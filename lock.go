@@ -2,7 +2,8 @@ package main
 
 
 import (
-    "fmt"
+	"os"
+	"fmt"
 	"unsafe"
 	"encoding/json"
 	"golang.org/x/sys/windows"
@@ -32,8 +33,8 @@ type OSInformation struct {
 
 
 func init() {
-    ntdll := windows.NewLazySystemDLL("ntdll.dll")
-    rtlGetVersion = ntdll.NewProc("RtlGetVersion")
+	ntdll := windows.NewLazySystemDLL("ntdll.dll")
+	rtlGetVersion = ntdll.NewProc("RtlGetVersion")
 }
 
 
@@ -45,12 +46,25 @@ func main() {
 		fmt.Printf("RtlGetVersion failed: %v\n", err)
 		return
 	}
-
+	
 	osInfo := []OSInformation{{ Field0: fmt.Sprint(osVersionInfo.DwMajorVersion) , Field1: fmt.Sprint(osVersionInfo.DwMinorVersion), Field2: fmt.Sprint(osVersionInfo.DwBuildNumber)}}
+	
+	// Write to file
 	jsonData, err := json.Marshal(osInfo)
 	if err != nil {
 		fmt.Printf("Error marshaling to JSON: %v\n", err)
 		return
 	}
-	fmt.Println(string(jsonData))
+	file, err := os.Create("lock.json")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer file.Close()
+	_, err = file.Write(jsonData)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println("[+] File lock.json generated")
 }
