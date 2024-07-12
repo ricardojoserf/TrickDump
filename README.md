@@ -1,12 +1,13 @@
 # TrickDump
 
-TrickDump allows to dump the lsass process without generating a Minidump file. The attack is executed in three steps and these programs generate JSON and memory dump files: 
+TrickDump allows to dump the lsass process without generating a Minidump file, it generates JSON files and memory dump files in 3 steps: 
 
 - **Lock**: Get OS information using RtlGetVersion.
 
-- **Shock**: Open a process handle with NtOpenProcess and get modules information using NtQueryInformationProcess and NtReadVirtualMemory.
+- **Shock**: Get SeDebugPrivilege with NtOpenProcessToken and NtAdjustPrivilegeToken, open a handle with NtOpenProcess and then get modules information using NtQueryInformationProcess and NtReadVirtualMemory.
 
-- **Barrel**: Open a process handle with NtOpenProcess and get information and dump memory regions using NtQueryVirtualMemory and NtReadVirtualMemory. By default it generates one dump file per memory region but you can create one file with all regions changing the "big_file" boolean value to True in the Main function. 
+- **Barrel**: Get SeDebugPrivilege, open a handle and then get information and dump memory regions using NtQueryVirtualMemory and NtReadVirtualMemory. 
+
 
 ![img](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/trickdump.drawio.png)
 
@@ -31,16 +32,17 @@ The benefits of this technique are:
   - "debugproc": Using a process created in debug mode. If a second argument is not used the process is "c:\windows\system32\calc.exe".
   - "download": Using a URL to download the file.
 
-It comes in two flavours:
+It comes in three flavours:
 
 - .NET: The main branch
 - Python: The [python-flavour branch](https://github.com/ricardojoserf/TrickDump/tree/python-flavour)
+- Golang: The [golang-flavour branch](https://github.com/ricardojoserf/TrickDump/tree/golang-flavour)
 
 -------------------------
 
 ## Example
 
-The programs are executed in the victim system which create the three JSON files. In this case ntdll.dll is not overwritten and the Barrel.exe program has the "big_file" boolean value set to True, so the program creates only one file with all the dumped memory regions:
+The programs are executed in the victim system which create three JSON files and the memory regions dump, in this case ntdll.dll is not overwritten:
 
 ![img](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_1.png)
 
@@ -48,7 +50,7 @@ After exfiltrating the files, the Minidump file is generated:
 
 ![img](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_2.png)
 
-Now the programs are executed with a different ntdll.dll overwrite technique each. The Barrel.exe program has the "big_file" boolean value set to False, so the program creates a directory and one dump file per memory region inside:
+Now the programs are executed with a different ntdll.dll overwrite technique each:
 
 ![img](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_3.png)
 
