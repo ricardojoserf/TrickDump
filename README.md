@@ -21,10 +21,18 @@ You can use the *-o* parameter for overwriting the ntdll.dll library:
 
 ![img2](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/trickdump_go2.png)
 
+As an alternative, you can compile the scripts to binaries using "go build":
+
+```
+go build lock.go && go build shock.go && go build barrel.go
+``` 
+
+![img3](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/trickdump_go3.png)
+
 Then use the *create_dump.py* script to generate the Minidump file in the attack system:
 
 ```
 python3 create_dump.py -m MEMORY_FILES [-l LOCK_FILE] [-s SHOCK_FILE] [-b BARREL_FILE] [-o OUTPUT_FILE] 
 ```
 
-![img3](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/trickdump_go3.png)
+![img4](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/trickdump_go4.png)
