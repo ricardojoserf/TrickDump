@@ -24,13 +24,13 @@ You can use the *-o* parameter for overwriting the ntdll.dll library:
 As an alternative, you can compile the scripts to single binaries using pyinstaller with the "-F" flag:
 
 ```
-pyinstaller -F lock.py
+pyinstaller -F lock.py && pyinstaller -F shock.py && pyinstaller -F barrel.py
 ```
+
+Or using Nuitka with the "--onefile" flag:
+
 ```
-pyinstaller -F shock.py
-```
-```
-pyinstaller -F barrel.py
+nuitka --onefile lock.py && nuitka --onefile shock.py && nuitka --onefile barrel.py
 ```
 
 ![img3](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/trickdump_py3.png)
