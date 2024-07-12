@@ -173,7 +173,7 @@ def read_remoteWStr(process_handle, mem_address):
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-o', '--option', required=True, action='store', help='Option for library overwrite: \"disk\", \"knowndlls\" or \"debugproc\"')
+    parser.add_argument('-o', '--option', required=False, action='store', help='Option for library overwrite: \"disk\", \"knowndlls\" or \"debugproc\"')
     parser.add_argument('-p', '--path', required=False, default="", action='store', help='Path to ntdll file in disk (for \"disk\" option) or program to open in debug mode (\"debugproc\" option)')
     my_args = parser.parse_args()
     return my_args
