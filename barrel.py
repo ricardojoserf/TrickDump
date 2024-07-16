@@ -5,8 +5,9 @@ import psutil
 import random
 import string
 import ctypes
-from ctypes import wintypes
+import zipfile
 import argparse
+from ctypes import wintypes
 from overwrite import overwrite_disk, overwrite_knowndlls, overwrite_debugproc
 
 
@@ -206,18 +207,11 @@ def main():
     process_handle = open_process(pid_)
     print("[+] Process handle: \t" + str(process_handle.value))
     
-    # Create directory
-    memdump_directory = get_random_string(5) 
-    if not os.path.exists(memdump_directory):
-        os.makedirs(memdump_directory)
-    print("[+] Files will be generated at " + memdump_directory)
-
     # Loop memory regions
     mem_address = 0
     proc_max_address_l = 0x7FFFFFFEFFFF
-    aux_size = 0
-    aux_name = ""
     mem64list_arr = []
+    files_content = []
 
     while (mem_address < proc_max_address_l):
         memory_info = MEMORY_BASIC_INFORMATION()
@@ -246,16 +240,23 @@ def main():
 
             if status == 0:
                 memdump_filename = get_random_string(9) + "." + get_random_string(3)
-                with open(memdump_directory + "\\" + memdump_filename, 'wb') as file:
-                    file.write(buffer.raw)
+                #with open(memdump_directory + "\\" + memdump_filename, 'wb') as file:
+                #    file.write(buffer.raw)
+                files_content.append({"filename": memdump_filename, "content": buffer.raw})
                 mem64list_arr.append({"field0": memdump_filename, "field1": hex(mem_address), "field2": memory_info.RegionSize})
-        
+    
         mem_address += memory_info.RegionSize
 
     file_name = "barrel.json"
+    zip_name  = "barrel.zip"
+
     with open(file_name, 'w', encoding='utf-8') as f:
             json.dump(mem64list_arr, f, ensure_ascii=False)
     print("[+] File " + file_name + " generated.")
+    with zipfile.ZipFile(zip_name, 'w') as zipf:
+        for f in files_content:
+            zipf.writestr(f['filename'], f['content'])
+    print("[+] File " + zip_name + " generated.")
 
 
 if __name__ == "__main__":
