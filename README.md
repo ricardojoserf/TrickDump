@@ -15,7 +15,7 @@ TrickDump allows to dump the lsass process without generating a Minidump file, i
 Then use the *create_dump.py* script to generate the Minidump file in the attack system:
 
 ```
-python3 create_dump.py -m MEMORY_FILES [-l LOCK_FILE] [-s SHOCK_FILE] [-b BARREL_FILE] [-o OUTPUT_FILE] 
+python3 create_dump.py [-l LOCK_JSON] [-s SHOCK_JSON] [-b BARREL_JSON] [-z BARREL_ZIP] [-o OUTPUT_FILE] 
 ```
 
 The benefits of this technique are:
@@ -30,7 +30,6 @@ The benefits of this technique are:
   - "disk": Using a DLL already on disk. If a second argument is not used the path is "C:\Windows\System32\ntdll.dll".
   - "knowndlls": Using the KnownDlls folder.
   - "debugproc": Using a process created in debug mode. If a second argument is not used the process is "c:\windows\system32\calc.exe".
-  - "download": Using a URL to download the file.
 
 It comes in three flavours:
 
@@ -40,20 +39,30 @@ It comes in three flavours:
 
 -------------------------
 
-## Example
+## Usage
 
-The programs are executed in the victim system which create three JSON files and the memory regions dump, in this case ntdll.dll is not overwritten:
+The programs are executed in the victim system and create three JSON files (with memory regions information) and one zip file (with each memory region dump).
+
+```
+Lock.exe [disk/knowndlls/debugproc]
+```
+
+```
+Shock.exe [disk/knowndlls/debugproc]
+```
+
+```
+Barrel.exe [disk/knowndlls/debugproc]
+```
+
+You can execute the programs directly without overwritting the ntdll.dll library:
 
 ![img](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_1.png)
 
-After exfiltrating the files, the Minidump file is generated:
-
-![img](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_2.png)
-
-Now the programs are executed with a different ntdll.dll overwrite technique each:
+Or use one of the three different overwrite techniques:
 
 ![img](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_3.png)
 
-The Minidump file is generated using the only mandatory argument, *-m*, which indicates the path to the memory file or the directory with all region dumps:
+Then the Minidump file is generated:
 
 ![img](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_4.png)

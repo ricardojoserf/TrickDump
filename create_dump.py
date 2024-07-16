@@ -1,15 +1,16 @@
 import os
 import sys
 import json
+import zipfile
 import argparse
 
 
 def get_args():
 	parser = argparse.ArgumentParser()
-	parser.add_argument('-l', '--lock', required=False, default='lock.json', action='store', help='File path for lock.json')
-	parser.add_argument('-s', '--shock', required=False, default='shock.json', action='store', help='File path for shock.json')
-	parser.add_argument('-b', '--barrel', required=False, default='barrel.json', action='store', help='File path for barrel.json')
-	parser.add_argument('-m', '--memory_files', required=True, action='store', help='Directory with the regions memory dumps')
+	parser.add_argument('-l', '--lock_json',   required=False, default='lock.json', action='store', help='File path for lock.json')
+	parser.add_argument('-s', '--shock_json',  required=False, default='shock.json', action='store', help='File path for shock.json')
+	parser.add_argument('-b', '--barrel_json', required=False, default='barrel.json', action='store', help='File path for barrel.json')
+	parser.add_argument('-z', '--barrel_zip',  required=True, default = 'barrel.zip', action='store', help='Zip file containing the regions memory dumps')
 	parser.add_argument('-o', '--output_file', required=False, default='oogie.dmp', action='store', help='Dump file name')
 	my_args = parser.parse_args()
 	return my_args
@@ -21,7 +22,7 @@ def read_binary_file(file_path):
     return byte_array
 
 
-def get_dump_bytearr(lock_json, shock_json, barrel_json, memory_files):
+def get_dump_bytearr(lock_json, shock_json, barrel_json, zip_file):
 	# Calculations
 	number_modules = str(len(shock_json))
 	modulelist_size = 4
@@ -101,19 +102,14 @@ def get_dump_bytearr(lock_json, shock_json, barrel_json, memory_files):
 		memory64list_stream += int(mem64.get("field1"),16).to_bytes(8, 'little') # Mem64 Address
 		memory64list_stream += int(mem64.get("field2")).to_bytes(8, 'little')    # Mem64 Size
 
-	# Add memory regions
+	# Add memory regions from zip file
 	memory_bytearr = b''
-	if not os.path.isfile(memory_files):
-		print("[+] Processing files in directory " + memory_files)
-		for mem64 in barrel_json:
-			file_path = memory_files + mem64.get("field0")
-			region_bytearr = read_binary_file(file_path)
-			memory_bytearr += region_bytearr
-	else:
-		print("[+] Processing file " + memory_files)
-		region_bytearr = read_binary_file(memory_files)
-		memory_bytearr += region_bytearr
 
+	with zipfile.ZipFile(zip_file, 'r') as zip_file_handle:
+		for file_info in zip_file_handle.infolist():
+			with zip_file_handle.open(file_info.filename) as file:
+				file_bytes = file.read()
+				memory_bytearr += file_bytes
 
 	dump_file = header + stream_directory + systeminfo_stream + modulelist_stream + memory64list_stream + memory_bytearr
 	return dump_file
@@ -138,10 +134,10 @@ def show_banner():
 
 def main():
 	args = get_args()
-	lock_file = args.lock
-	shock_file = args.shock
-	barrel_file = args.barrel
-	memory_files = args.memory_files
+	lock_file = args.lock_json
+	shock_file = args.shock_json
+	barrel_file = args.barrel_json
+	memory_files = args.barrel_zip
 	output_file = args.output_file
 
 	show_banner()

