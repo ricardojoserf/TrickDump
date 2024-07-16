@@ -31,7 +31,7 @@ The benefits of this technique are:
   - "knowndlls": Using the KnownDlls folder.
   - "debugproc": Using a process created in debug mode. If a second argument is not used the process is "c:\windows\system32\calc.exe".
 
-It will not work is PPL is enabled, the PEB structure is unreadable or the binaries are not compiled as 64-bit.
+It will not work if PPL is enabled, the PEB structure is unreadable or the binaries are not compiled as 64-bit.
 
 It comes in three flavours:
 
@@ -43,7 +43,7 @@ It comes in three flavours:
 
 ## Usage
 
-The programs are executed in the victim system and create three JSON files (with memory regions information) and one zip file (with each memory region dump).
+The programs are executed in the victim system, creating three JSON files (with memory regions information) and one zip file (with each memory region dump).
 
 ```
 Lock.exe [disk/knowndlls/debugproc]
@@ -57,7 +57,7 @@ Shock.exe [disk/knowndlls/debugproc]
 Barrel.exe [disk/knowndlls/debugproc]
 ```
 
-You can execute the programs directly without overwritting the ntdll.dll library:
+You can execute the programs directly without overwriting the ntdll.dll library:
 
 ![img1](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_1.png)
 
