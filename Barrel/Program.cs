@@ -323,6 +323,7 @@ namespace Barrel
                     }
                 }
             }
+            Console.WriteLine("[+] File " + zipFilePath + " generated.");
         }
 
 

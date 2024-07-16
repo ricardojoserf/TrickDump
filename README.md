@@ -31,6 +31,8 @@ The benefits of this technique are:
   - "knowndlls": Using the KnownDlls folder.
   - "debugproc": Using a process created in debug mode. If a second argument is not used the process is "c:\windows\system32\calc.exe".
 
+It will not work is PPL is enabled, the PEB structure is unreadable or the binaries are not compiled as 64-bit.
+
 It comes in three flavours:
 
 - .NET: The main branch
@@ -57,12 +59,12 @@ Barrel.exe [disk/knowndlls/debugproc]
 
 You can execute the programs directly without overwritting the ntdll.dll library:
 
-![img](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_1.png)
+![img1](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_1.png)
 
 Or use one of the three different overwrite techniques:
 
-![img](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_3.png)
+![img2](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_3.png)
 
 Then the Minidump file is generated:
 
-![img](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_4.png)
+![img3](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_3.png)
