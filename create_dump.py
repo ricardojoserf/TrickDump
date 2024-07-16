@@ -10,7 +10,7 @@ def get_args():
 	parser.add_argument('-l', '--lock_json',   required=False, default='lock.json', action='store', help='File path for lock.json')
 	parser.add_argument('-s', '--shock_json',  required=False, default='shock.json', action='store', help='File path for shock.json')
 	parser.add_argument('-b', '--barrel_json', required=False, default='barrel.json', action='store', help='File path for barrel.json')
-	parser.add_argument('-z', '--barrel_zip',  required=True, default = 'barrel.zip', action='store', help='Zip file containing the regions memory dumps')
+	parser.add_argument('-z', '--barrel_zip',  required=False, default='barrel.zip', action='store', help='Zip file containing the regions memory dumps')
 	parser.add_argument('-o', '--output_file', required=False, default='oogie.dmp', action='store', help='Dump file name')
 	my_args = parser.parse_args()
 	return my_args
