@@ -63,7 +63,7 @@ You can execute the programs directly without overwritting the ntdll.dll library
 
 Or use one of the three different overwrite techniques:
 
-![img2](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_3.png)
+![img2](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_2.png)
 
 Then the Minidump file is generated:
 
