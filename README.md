@@ -12,14 +12,14 @@ go run shock.go [-o OPTION] [-p PATH]
 go run barrel.go [-o OPTION] [-p PATH]
 ```
 
-![img1](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/trickdump_go1.png)
+![img1](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_go1.png)
 
 You can use the *-o* parameter for overwriting the ntdll.dll library:
 - "disk": Using a DLL already on disk. If *-p* parameter is not used the path is "C:\Windows\System32\ntdll.dll".
 - "knowndlls": Using the KnownDlls folder.
 - "debugproc": Using a process created in debug mode. If *-p* parameter is not used the process is "c:\windows\system32\calc.exe".
 
-![img2](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/trickdump_go2.png)
+![img2](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_go2.png)
 
 As an alternative, you can compile the scripts to binaries using "go build":
 
@@ -27,12 +27,12 @@ As an alternative, you can compile the scripts to binaries using "go build":
 go build lock.go && go build shock.go && go build barrel.go
 ``` 
 
-![img3](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/trickdump_go3.png)
+![img3](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_go3.png)
 
 Then use the *create_dump.py* script to generate the Minidump file in the attack system:
 
 ```
-python3 create_dump.py -m MEMORY_FILES [-l LOCK_FILE] [-s SHOCK_FILE] [-b BARREL_FILE] [-o OUTPUT_FILE] 
+python3 create_dump.py [-l LOCK_JSON] [-s SHOCK_JSON] [-b BARREL_JSON] [-z BARREL_ZIP] [-o OUTPUT_FILE]
 ```
 
-![img4](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/trickdump_go4.png)
+![img4](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_go4.png)
