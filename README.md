@@ -1,10 +1,10 @@
 # TrickDump
 
-TrickDump allows to dump the lsass process without generating a Minidump file, it generates JSON files and memory dump files in 3 steps: 
+TrickDump allows to dump the lsass process without generating a Minidump file, generating instead three JSON files and one zip file with memory regions dumps. It has three steps:
 
 - **Lock**: Get OS information using RtlGetVersion.
 
-- **Shock**: Get process handle with NtGetNextProcess, GetProcessImageFileName and NtQueryInformationProcess, get SeDebugPrivilege privilege with NtOpenProcessToken and NtAdjustPrivilegeToken, open a handle with NtOpenProcess and then get modules information using NtQueryInformationProcess and NtReadVirtualMemory.
+- **Shock**: Get process handle with NtGetNextProcess and GetProcessImageFileName, get SeDebugPrivilege privilege with NtOpenProcessToken and NtAdjustPrivilegeToken, open a handle with NtOpenProcess and then get modules information using NtQueryInformationProcess and NtReadVirtualMemory.
 
 - **Barrel**: Get process handle, get SeDebugPrivilege privilege, open a handle and then get information and dump memory regions using NtQueryVirtualMemory and NtReadVirtualMemory. 
 
@@ -23,6 +23,7 @@ The benefits of this technique are:
 - There is never a valid Minidump file in disk, memory or the network traffic.
 
 - There is not a single program or process executing the whole attack but three separate ones, which may raise less flags.
+  - Also if you have information about the OS of the target machine you can skip the first step ("Lock").
 
 - The programs only use NTAPIS (this project is a variant of [NativeDump](https://github.com/ricardojoserf/NativeDump)).
 
@@ -32,6 +33,7 @@ The benefits of this technique are:
   - "debugproc": Using a process created in debug mode. If a second argument is not used the process is "c:\windows\system32\calc.exe".
 
 It will not work if PPL is enabled, the PEB structure is unreadable or the binaries are not compiled as 64-bit.
+
 
 It comes in three flavours:
 
