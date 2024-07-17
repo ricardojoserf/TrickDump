@@ -176,8 +176,23 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('-o', '--option', required=False, action='store', help='Option for library overwrite: \"disk\", \"knowndlls\" or \"debugproc\"')
     parser.add_argument('-p', '--path', required=False, default="", action='store', help='Path to ntdll file in disk (for \"disk\" option) or program to open in debug mode (\"debugproc\" option)')
+    parser.add_argument('-zp', '--zip_pwd', required=False, default="", action='store', help='Password for zip file')
     my_args = parser.parse_args()
     return my_args
+
+
+def create_nonpwd_zip(zip_name, files_content):
+    with zipfile.ZipFile(zip_name, 'w') as zipf:
+        for f in files_content:
+            zipf.writestr(f['filename'], f['content'])
+
+
+def create_pwd_zip(output_zip, password, file_list):
+    import pyzipper
+    with pyzipper.AESZipFile(output_zip, 'w', compression=pyzipper.ZIP_DEFLATED, encryption=pyzipper.WZ_AES) as zf:
+        zf.setpassword(password.encode('utf-8'))
+        for file_info in file_list:
+            zf.writestr(file_info['filename'], file_info['content'])
 
 
 def main():
@@ -249,13 +264,15 @@ def main():
 
     file_name = "barrel.json"
     zip_name  = "barrel.zip"
+    zip_pwd   = args.zip_pwd #"oogie-boogie"
 
     with open(file_name, 'w', encoding='utf-8') as f:
             json.dump(mem64list_arr, f, ensure_ascii=False)
     print("[+] File " + file_name + " generated.")
-    with zipfile.ZipFile(zip_name, 'w') as zipf:
-        for f in files_content:
-            zipf.writestr(f['filename'], f['content'])
+    if zip_pwd != "":
+        create_pwd_zip(zip_name, zip_pwd, files_content)
+    else:
+        create_nonpwd_zip(zip_name, files_content)
     print("[+] File " + zip_name + " generated.")
 
 
