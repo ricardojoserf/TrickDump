@@ -1,6 +1,8 @@
 # TrickDump - "python-flavour" branch
 
-This branch implements the same functionality as the main branch but using Python3. You can run the files as scripts:
+This branch implements the same functionality as the main branch but using Python3. As an addition, it allows to create the zip file with a password.
+
+You can run the files as scripts:
 
 ```
 python lock.py [-o OPTION] [-p PATH]
@@ -9,7 +11,7 @@ python lock.py [-o OPTION] [-p PATH]
 python shock.py [-o OPTION] [-p PATH]
 ```
 ```
-python barrel.py [-o OPTION] [-p PATH]
+python barrel.py [-o OPTION] [-p PATH] [-zp ZIP_PASSWORD]
 ```
 
 ![img1](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_py1.png)
@@ -39,7 +41,7 @@ nuitka --onefile lock.py && nuitka --onefile shock.py && nuitka --onefile barrel
 Then use the *create_dump.py* script to generate the Minidump file in the attack system:
 
 ```
-python3 create_dump.py [-l LOCK_JSON] [-s SHOCK_JSON] [-b BARREL_JSON] [-z BARREL_ZIP] [-o OUTPUT_FILE]
+python3 create_dump.py [-l LOCK_JSON] [-s SHOCK_JSON] [-b BARREL_JSON] [-z BARREL_ZIP] [-zp ZIP_PASSWORD] [-o OUTPUT_FILE]
 ```
 
 ![img4](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_py4.png)
