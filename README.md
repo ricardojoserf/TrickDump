@@ -1,6 +1,8 @@
 # TrickDump - "golang-flavour" branch
 
-This branch implements the same functionality as the main branch but using Golang:
+This branch implements the same functionality as the main branch but using Golang. As an addition, it allows to create the zip file with a password.
+
+You can run the files as scripts:
 
 ```
 go run lock.go [-o OPTION] [-p PATH]
@@ -9,7 +11,7 @@ go run lock.go [-o OPTION] [-p PATH]
 go run shock.go [-o OPTION] [-p PATH]
 ```
 ```
-go run barrel.go [-o OPTION] [-p PATH]
+go run barrel.go [-o OPTION] [-p PATH] [-zp ZIP_PASSWORD]
 ```
 
 ![img1](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_go1.png)
@@ -32,7 +34,7 @@ go build lock.go && go build shock.go && go build barrel.go
 Then use the *create_dump.py* script to generate the Minidump file in the attack system:
 
 ```
-python3 create_dump.py [-l LOCK_JSON] [-s SHOCK_JSON] [-b BARREL_JSON] [-z BARREL_ZIP] [-o OUTPUT_FILE]
+python3 create_dump.py [-l LOCK_JSON] [-s SHOCK_JSON] [-b BARREL_JSON] [-z BARREL_ZIP] [-zp ZIP_PASSWORD] [-o OUTPUT_FILE]
 ```
 
 ![img4](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_go4.png)

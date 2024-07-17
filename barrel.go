@@ -9,7 +9,7 @@ import (
 	"strings"
 	"syscall"
     "math/big"
-    "archive/zip"
+    "github.com/alexmullins/zip" //"archive/zip"
 	"crypto/rand"
 	"unicode/utf8"
 	"encoding/json"
@@ -605,7 +605,7 @@ func overwrite(optionFlag string, pathFlag string){
 }
 
 
-func writeZip (zip_file string, memFile_arr []MemFile) {
+func writeNonPwdZip (zip_file string, memFile_arr []MemFile) {
     zipFile, err := os.Create(zip_file)
     if err != nil {
         fmt.Printf("Error creating ZIP file: %v\n", err)
@@ -621,6 +621,30 @@ func writeZip (zip_file string, memFile_arr []MemFile) {
             fmt.Printf("Error writing to ZIP file: %v\n", err)
         }
         _, _ = fileWriter.Write(memFile.Content)
+    }
+    fmt.Printf("[+] File %s generated.\n", zip_file)
+}
+
+
+func writePwdZip (zip_file string, zip_pwd string, memFile_arr []MemFile) {
+    zipFile, err := os.Create(zip_file)
+    if err != nil {
+        fmt.Sprintf("error creating ZIP file: %v", err)
+    }
+    defer zipFile.Close()
+
+    zipWriter := zip.NewWriter(zipFile)
+    defer zipWriter.Close()
+
+    for _, memFile := range memFile_arr {
+        fileWriter, err := zipWriter.Encrypt(memFile.Filename, zip_pwd)
+        if err != nil {
+            fmt.Sprintf("error writing to ZIP file: %v", err)
+        }
+        _, err = fileWriter.Write(memFile.Content)
+        if err != nil {
+            fmt.Sprintf("error writing content to ZIP file: %v", err)
+        }
     }
     fmt.Printf("[+] File %s generated.\n", zip_file)
 }
@@ -651,8 +675,10 @@ func main() {
 	// Ntdll overwrite options
 	var optionFlagStr string
 	var pathFlagStr string
-	flag.StringVar(&optionFlagStr, "o", "default", "Option for library overwrite: \"disk\", \"knowndlls\" or \"debugproc\"")
-    flag.StringVar(&pathFlagStr,  "p", "default", "Path to ntdll file in disk (for \"disk\" option) or program to open in debug mode (\"debugproc\" option)")
+    var zipPasswordStr string
+	flag.StringVar(&optionFlagStr,  "o",  "default", "Option for library overwrite: \"disk\", \"knowndlls\" or \"debugproc\"")
+    flag.StringVar(&pathFlagStr,    "p",  "default", "Path to ntdll file in disk (for \"disk\" option) or program to open in debug mode (\"debugproc\" option)")
+    flag.StringVar(&zipPasswordStr, "zp", "",        "Password for zip file")
     flag.Parse()
     if (optionFlagStr != "default") {
     	overwrite(optionFlagStr, pathFlagStr)
@@ -712,5 +738,9 @@ func main() {
 
     // Write ZIP file
     zip_file := "barrel.zip"
-    writeZip(zip_file, memFile_arr)
+    if zipPasswordStr == ""{
+        writeNonPwdZip(zip_file, memFile_arr)
+    } else {
+        writePwdZip(zip_file, zipPasswordStr, memFile_arr)   
+    }
 }

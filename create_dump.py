@@ -7,11 +7,12 @@ import argparse
 
 def get_args():
 	parser = argparse.ArgumentParser()
-	parser.add_argument('-l', '--lock_json',   required=False, default='lock.json', action='store', help='File path for lock.json')
-	parser.add_argument('-s', '--shock_json',  required=False, default='shock.json', action='store', help='File path for shock.json')
-	parser.add_argument('-b', '--barrel_json', required=False, default='barrel.json', action='store', help='File path for barrel.json')
-	parser.add_argument('-z', '--barrel_zip',  required=False, default='barrel.zip', action='store', help='Zip file containing the regions memory dumps')
-	parser.add_argument('-o', '--output_file', required=False, default='oogie.dmp', action='store', help='Dump file name')
+	parser.add_argument('-l',  '--lock_json',   required=False, default='lock.json', action='store', help='File path for lock.json')
+	parser.add_argument('-s',  '--shock_json',  required=False, default='shock.json', action='store', help='File path for shock.json')
+	parser.add_argument('-b',  '--barrel_json', required=False, default='barrel.json', action='store', help='File path for barrel.json')
+	parser.add_argument('-z',  '--barrel_zip',  required=False, default='barrel.zip', action='store', help='Zip file containing the regions memory dumps')
+	parser.add_argument('-zp', '--barrel_zip_pwd', required=False, default='', action='store', help='Zip file containing the regions memory dumps')
+	parser.add_argument('-o',  '--output_file', required=False, default='oogie.dmp', action='store', help='Dump file name')
 	my_args = parser.parse_args()
 	return my_args
 
@@ -22,7 +23,7 @@ def read_binary_file(file_path):
     return byte_array
 
 
-def get_dump_bytearr(lock_json, shock_json, barrel_json, zip_file):
+def get_dump_bytearr(lock_json, shock_json, barrel_json, zip_file, zip_file_pwd):
 	# Calculations
 	number_modules = str(len(shock_json))
 	modulelist_size = 4
@@ -105,11 +106,20 @@ def get_dump_bytearr(lock_json, shock_json, barrel_json, zip_file):
 	# Add memory regions from zip file
 	memory_bytearr = b''
 
-	with zipfile.ZipFile(zip_file, 'r') as zip_file_handle:
-		for file_info in zip_file_handle.infolist():
-			with zip_file_handle.open(file_info.filename) as file:
-				file_bytes = file.read()
-				memory_bytearr += file_bytes
+	if zip_file_pwd == "":
+		with zipfile.ZipFile(zip_file, 'r') as zip_file_handle:
+			for file_info in zip_file_handle.infolist():
+				with zip_file_handle.open(file_info.filename) as file:
+					file_bytes = file.read()
+					memory_bytearr += file_bytes
+	else:
+		import pyzipper
+		with pyzipper.AESZipFile(zip_file, 'r') as zip_file_handle:
+			zip_file_handle.pwd = zip_file_pwd.encode('utf-8')
+			for file_info in zip_file_handle.infolist():
+				with zip_file_handle.open(file_info.filename) as file:
+					file_bytes = file.read()
+					memory_bytearr += file_bytes
 
 	dump_file = header + stream_directory + systeminfo_stream + modulelist_stream + memory64list_stream + memory_bytearr
 	return dump_file
@@ -137,7 +147,8 @@ def main():
 	lock_file = args.lock_json
 	shock_file = args.shock_json
 	barrel_file = args.barrel_json
-	memory_files = args.barrel_zip
+	zip_file = args.barrel_zip
+	zip_file_pwd = args.barrel_zip_pwd
 	output_file = args.output_file
 
 	show_banner()
@@ -159,11 +170,11 @@ def main():
 	else:
 		print("[-] File " + barrel_file + " not found")
 		sys.exit(0)
-	if not os.path.exists(memory_files):
+	if not os.path.exists(zip_file):
 		print("[-] File or Directory " + memory_files + " not found")
 		sys.exit(0)
 
-	dump_file = get_dump_bytearr(lock_json, shock_json, barrel_json, memory_files)
+	dump_file = get_dump_bytearr(lock_json, shock_json, barrel_json, zip_file, zip_file_pwd)
 	create_file(output_file, dump_file)
 	print("[+] Dump file " + output_file + " created ")
 
