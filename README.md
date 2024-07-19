@@ -1,6 +1,6 @@
 # TrickDump
 
-TrickDump allows to dump the lsass process without generating a Minidump file, generating instead three JSON files and one zip file with memory regions dumps. It has three steps:
+TrickDump allows to dump the lsass process without generating a Minidump file, generating instead three JSON files and one zip file with memory regions dumps. In three steps:
 
 - **Lock**: Get OS information using RtlGetVersion.
 
@@ -27,6 +27,8 @@ The benefits of this technique are:
 
 - The programs only use NTAPIS (this project is a variant of [NativeDump](https://github.com/ricardojoserf/NativeDump)).
 
+- It does not use OpenProcess or NtOpenProcess to get the lsass process handle with (PROCESS_VM_OPERATION | PROCESS_VM_WRITE) access rights.
+  
 - Each program allows to overwrite the ntdll.dll library ".text" section to bypass API hooking:
   - "disk": Using a DLL already on disk. If a second argument is not used the path is "C:\Windows\System32\ntdll.dll".
   - "knowndlls": Using the KnownDlls folder.
@@ -34,12 +36,12 @@ The benefits of this technique are:
 
 It will not work if PPL is enabled, the PEB structure is unreadable or the binaries are not compiled as 64-bit.
 
-
 It comes in three flavours:
 
 - .NET: The main branch
 - Python: The [python-flavour branch](https://github.com/ricardojoserf/TrickDump/tree/python-flavour)
 - Golang: The [golang-flavour branch](https://github.com/ricardojoserf/TrickDump/tree/golang-flavour)
+
 
 -------------------------
 
