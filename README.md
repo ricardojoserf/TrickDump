@@ -4,7 +4,7 @@ TrickDump allows to dump the lsass process without generating a Minidump file, g
 
 - **Lock**: Get OS information using RtlGetVersion.
 
-- **Shock**: Get SeDebugPrivilege privilege with NtOpenProcessToken and NtAdjustPrivilegeToken, open a handle with NtGetNextProcess and GetProcessImageFileName and then get modules information using NtQueryInformationProcess and NtReadVirtualMemory.
+- **Shock**: Get SeDebugPrivilege privilege with NtOpenProcessToken and NtAdjustPrivilegeToken, open a handle with NtGetNextProcess and NtQueryInformationProcess and then get modules information using NtQueryInformationProcess and NtReadVirtualMemory.
 
 - **Barrel**: Get SeDebugPrivilege privilege, open a handle and then get information and dump memory regions using NtQueryVirtualMemory and NtReadVirtualMemory. 
 

