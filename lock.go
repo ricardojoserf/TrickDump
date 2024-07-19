@@ -2,7 +2,7 @@ package main
 
 
 import (
-	"os"
+    "os"
     "fmt"
     "flag"
     "unsafe"
@@ -26,8 +26,8 @@ const (
 )
 
 var (
-	rtlGetVersion *windows.LazyProc
-	VirtualProtect *windows.LazyProc
+    rtlGetVersion *windows.LazyProc
+    VirtualProtect *windows.LazyProc
     createFile *windows.LazyProc
     createFileMapping *windows.LazyProc
     mapViewOfFile *windows.LazyProc
@@ -42,18 +42,18 @@ var (
 
 // Structures
 type RTL_OSVERSIONINFOW struct {
-	DwOSVersionInfoSize uint32
-	DwMajorVersion      uint32
-	DwMinorVersion      uint32
-	DwBuildNumber       uint32
-	DwPlatformId        uint32
-	SzCSDVersion        [128]uint16
+    DwOSVersionInfoSize uint32
+    DwMajorVersion      uint32
+    DwMinorVersion      uint32
+    DwBuildNumber       uint32
+    DwPlatformId        uint32
+    SzCSDVersion        [128]uint16
 }
 
 type OSInformation struct {
-	Field0	string `json:"field0"`
-	Field1	string    `json:"field1"`
-	Field2  string `json:"field2"`
+    Field0	string `json:"field0"`
+    Field1	string    `json:"field1"`
+    Field2  string `json:"field2"`
 }
 
 type PROCESS_BASIC_INFORMATION struct {
@@ -110,7 +110,7 @@ type PROCESS_INFORMATION struct {
 
 
 func init() {
-	kernel32 := windows.NewLazySystemDLL("kernel32.dll")
+    kernel32 := windows.NewLazySystemDLL("kernel32.dll")
     VirtualProtect = kernel32.NewProc("VirtualProtect")
     createFile = kernel32.NewProc("CreateFileA")
     createFileMapping = kernel32.NewProc("CreateFileMappingA")
@@ -187,7 +187,7 @@ func get_local_lib_address(dll_name string) uintptr {
     ldr_address := read_remoteintptr(process_handle, ldr_pointer, 8)
     // fmt.Printf("[+] ldr_pointer: \t0x%x\n", ldr_pointer)
     // fmt.Printf("[+] Ldr Address: \t0x%x\n", ldr_address)
-    
+
     // next_flink
     InInitializationOrderModuleList:= ldr_address + inInitializationOrderModuleList_offset
     next_flink := read_remoteintptr(process_handle, InInitializationOrderModuleList, 8)
@@ -226,7 +226,7 @@ func get_section_info(base_address uintptr) (uintptr,uintptr) {
 
 
 func replace_ntdll_section(unhooked_ntdll_text uintptr, local_ntdll_txt uintptr, local_ntdll_txt_size uintptr){
-	fmt.Printf("[+] Copying %d bytes from 0x%s to 0x%s\n", local_ntdll_txt_size, fmt.Sprintf("%x", unhooked_ntdll_text), fmt.Sprintf("%x", local_ntdll_txt))
+    fmt.Printf("[+] Copying %d bytes from 0x%s to 0x%s\n", local_ntdll_txt_size, fmt.Sprintf("%x", unhooked_ntdll_text), fmt.Sprintf("%x", local_ntdll_txt))
 
     var oldProtect uintptr
     res, _, _ := VirtualProtect.Call(local_ntdll_txt, local_ntdll_txt_size, PAGE_EXECUTE_WRITECOPY, uintptr(unsafe.Pointer(&oldProtect)))
@@ -281,7 +281,7 @@ func overwrite_disk(file_name string) uintptr {
     // CloseHandle
     windows.CloseHandle(windows.Handle(file_handle))
     windows.CloseHandle(windows.Handle(mapping_handle))
-    
+
     // Add Offset
     var unhooked_ntdll_text uintptr = unhooked_ntdll + offset_mappeddll
     return unhooked_ntdll_text
@@ -320,7 +320,7 @@ func overwrite_knowndlls() uintptr {
 
     // CloseHandle
     windows.CloseHandle(windows.Handle(section_handle))
-    
+
     // Add offset
     var unhooked_ntdll_text uintptr = unhooked_ntdll + offset_mappeddll
     return unhooked_ntdll_text
@@ -339,7 +339,7 @@ func overwrite_debugproc(file_path string, local_ntdll_txt uintptr, local_ntdll_
         fmt.Printf("CreateProcess failed: %v\n", err)
         os.Exit(0)
     }
-    
+
     // NtReadVirtualMemory: debugged_process ntdll_handle = local ntdll_handle --> debugged_process .text section ntdll_handle = local .text section ntdll_handle
     buffer := make([]byte, local_ntdll_txt_size)
     var bytesRead uintptr
@@ -366,7 +366,7 @@ func overwrite_debugproc(file_path string, local_ntdll_txt uintptr, local_ntdll_
 
 
 func overwrite(optionFlag string, pathFlag string){
-	var local_ntdll uintptr = get_local_lib_address("ntdll.dll")
+    var local_ntdll uintptr = get_local_lib_address("ntdll.dll")
     // fmt.Printf("[+] Local Ntdll:\t0x%s\n", fmt.Sprintf("%x", local_ntdll))
     local_ntdll_txt_addr, local_ntdll_txt_size := get_section_info(local_ntdll)
     // fmt.Printf("[+] Local Ntdll Size:\t0x%s\n", fmt.Sprintf("%x", local_ntdll_txt_size))
@@ -418,42 +418,42 @@ func overwrite(optionFlag string, pathFlag string){
 
 
 func main() {
-	// Ntdll overwrite options
-	var optionFlagStr string
-	var pathFlagStr string
-	flag.StringVar(&optionFlagStr, "o", "default", "Option for library overwrite: \"disk\", \"knowndlls\" or \"debugproc\"")
+    // Ntdll overwrite options
+    var optionFlagStr string
+    var pathFlagStr string
+    flag.StringVar(&optionFlagStr, "o", "default", "Option for library overwrite: \"disk\", \"knowndlls\" or \"debugproc\"")
     flag.StringVar(&pathFlagStr,  "p", "default", "Path to ntdll file in disk (for \"disk\" option) or program to open in debug mode (\"debugproc\" option)")
     flag.Parse()
     if (optionFlagStr != "default") {
-    	overwrite(optionFlagStr, pathFlagStr)
+        overwrite(optionFlagStr, pathFlagStr)
     }
 
     var osVersionInfo RTL_OSVERSIONINFOW
     osVersionInfo.DwOSVersionInfoSize = uint32(unsafe.Sizeof(osVersionInfo))
     ret, _, err := rtlGetVersion.Call(uintptr(unsafe.Pointer(&osVersionInfo)))
     if ret != 0 {
-      fmt.Printf("RtlGetVersion failed: %v\n", err)
-      return
-  }
-  
-  osInfo := []OSInformation{{ Field0: fmt.Sprint(osVersionInfo.DwMajorVersion) , Field1: fmt.Sprint(osVersionInfo.DwMinorVersion), Field2: fmt.Sprint(osVersionInfo.DwBuildNumber)}}
-  
-  // Write to file
-  jsonData, err := json.Marshal(osInfo)
-  if err != nil {
-      fmt.Printf("Error marshaling to JSON: %v\n", err)
-      return
-  }
-  file, err := os.Create("lock.json")
-  if err != nil {
-      fmt.Println(err)
-      return
-  }
-  defer file.Close()
-  _, err = file.Write(jsonData)
-  if err != nil {
-      fmt.Println(err)
-      return
-  }
-  fmt.Println("[+] File lock.json generated.")
+        fmt.Printf("RtlGetVersion failed: %v\n", err)
+        return
+    }
+
+    osInfo := []OSInformation{{ Field0: fmt.Sprint(osVersionInfo.DwMajorVersion) , Field1: fmt.Sprint(osVersionInfo.DwMinorVersion), Field2: fmt.Sprint(osVersionInfo.DwBuildNumber)}}
+
+    // Write to file
+    jsonData, err := json.Marshal(osInfo)
+    if err != nil {
+        fmt.Printf("Error marshaling to JSON: %v\n", err)
+        return
+    }
+    file, err := os.Create("lock.json")
+    if err != nil {
+        fmt.Println(err)
+        return
+    }
+    defer file.Close()
+    _, err = file.Write(jsonData)
+    if err != nil {
+        fmt.Println(err)
+        return
+    }
+    fmt.Println("[+] File lock.json generated.")
 }

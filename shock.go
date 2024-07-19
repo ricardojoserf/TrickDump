@@ -225,7 +225,7 @@ func GetProcNameFromHandle(proc_handle uintptr) (string){
 	// Get PEB->ProcessParameters
 	processparameters_pointer := peb_addr + uintptr(processparameters_offset)
 	processparameters_adress := read_remoteintptr(proc_handle, processparameters_pointer, 8)
-	
+
 	// Get ProcessParameters->CommandLine
 	commandline_pointer := processparameters_adress + uintptr(commandline_offset)
 	commandline_address := read_remoteintptr(proc_handle, commandline_pointer, 8)
@@ -324,7 +324,7 @@ func query_process_information(proc_handle uintptr) ([]ModuleInformation){
 	// fmt.Printf("[+] next_flink: \t0x%s\n", fmt.Sprintf("%x", next_flink))
 
 	moduleinfo_arr := []ModuleInformation{}
-	
+
 	for (dll_base != 0){
 		next_flink = next_flink - 0x10
 		dll_base = read_remoteintptr(proc_handle, (next_flink + flink_dllbase_offset), 8)
@@ -334,10 +334,10 @@ func query_process_information(proc_handle uintptr) ([]ModuleInformation){
 
 		buffer := read_remoteintptr(proc_handle, (next_flink + flink_buffer_offset), 8)
 		base_dll_name := read_remoteWStr(proc_handle, buffer, 256)
-		
+
 		buffer = read_remoteintptr(proc_handle, (next_flink + flink_buffer_fulldllname_offset), 8)
 		full_dll_path := read_remoteWStr(proc_handle, buffer, 256)
-		
+
 		module_info := ModuleInformation{ Field0: base_dll_name, Field1: full_dll_path, Field2: (fmt.Sprintf("%x", dll_base)), Field3: 0}
 		moduleinfo_arr = append(moduleinfo_arr, module_info)
 		next_flink = read_remoteintptr(proc_handle, (next_flink + 0x10), 8)
@@ -397,7 +397,7 @@ func get_local_lib_address(dll_name string) uintptr {
 	ldr_address := read_remoteintptr(process_handle, ldr_pointer, 8)
 	// fmt.Printf("[+] ldr_pointer: \t0x%x\n", ldr_pointer)
 	// fmt.Printf("[+] Ldr Address: \t0x%x\n", ldr_address)
-	
+
 	// next_flink
 	InInitializationOrderModuleList:= ldr_address + inInitializationOrderModuleList_offset
 	next_flink := read_remoteintptr(process_handle, InInitializationOrderModuleList, 8)
@@ -492,7 +492,7 @@ func overwrite_disk(file_name string) uintptr {
 	// CloseHandle
 	windows.CloseHandle(windows.Handle(file_handle))
 	windows.CloseHandle(windows.Handle(mapping_handle))
-	
+
 	// Add Offset
 	var unhooked_ntdll_text uintptr = unhooked_ntdll + offset_mappeddll
 	return unhooked_ntdll_text
@@ -531,7 +531,7 @@ func overwrite_knowndlls() uintptr {
 
 	// CloseHandle
 	windows.CloseHandle(windows.Handle(section_handle))
-	
+
 	// Add offset
 	var unhooked_ntdll_text uintptr = unhooked_ntdll + offset_mappeddll
 	return unhooked_ntdll_text
@@ -550,7 +550,7 @@ func overwrite_debugproc(file_path string, local_ntdll_txt uintptr, local_ntdll_
 		fmt.Printf("[-] CreateProcess failed: %v\n", err)
 		os.Exit(0)
 	}
-	
+
 	// NtReadVirtualMemory: debugged_process ntdll_handle = local ntdll_handle --> debugged_process .text section ntdll_handle = local .text section ntdll_handle
 	buffer := make([]byte, local_ntdll_txt_size)
 	var bytesRead uintptr
@@ -654,7 +654,7 @@ func main() {
 
 	// Get modules information except size
 	moduleinfo_arr := query_process_information(proc_handle)
-	
+
 	// Get size for each module
 	var mem_address uintptr = 0
 	var proc_max_address_l uintptr = 0x7FFFFFFEFFFF
