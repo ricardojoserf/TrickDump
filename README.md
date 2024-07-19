@@ -27,8 +27,8 @@ The benefits of this technique are:
 
 - The programs only use NTAPIS (this project is a variant of [NativeDump](https://github.com/ricardojoserf/NativeDump)).
 
-- It does not use OpenProcess or NtOpenProcess to get the lsass process handle with (PROCESS_VM_OPERATION | PROCESS_VM_WRITE) access rights.
-  
+- It does not use OpenProcess or NtOpenProcess to get the lsass process handle with the *PROCESS_VM_OPERATION* and *PROCESS_VM_WRITE* access rights.
+    
 - Each program allows to overwrite the ntdll.dll library ".text" section to bypass API hooking:
   - "disk": Using a DLL already on disk. If a second argument is not used the path is "C:\Windows\System32\ntdll.dll".
   - "knowndlls": Using the KnownDlls folder.
