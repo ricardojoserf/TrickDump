@@ -7,7 +7,7 @@ import (
     "flag"
     "unsafe"
     "syscall"
-	"encoding/json"
+    "encoding/json"
     "unicode/utf16"
     "golang.org/x/sys/windows"
 )
@@ -122,7 +122,7 @@ func init() {
     ntReadVirtualMemory = ntdll.NewProc("NtReadVirtualMemory")
     ntQueryInformationProcess = ntdll.NewProc("NtQueryInformationProcess")
     ntOpenSection = ntdll.NewProc("NtOpenSection")
-	rtlGetVersion = ntdll.NewProc("RtlGetVersion")
+    rtlGetVersion = ntdll.NewProc("RtlGetVersion")
 }
 
 
@@ -428,32 +428,32 @@ func main() {
     	overwrite(optionFlagStr, pathFlagStr)
     }
 
-	var osVersionInfo RTL_OSVERSIONINFOW
-	osVersionInfo.DwOSVersionInfoSize = uint32(unsafe.Sizeof(osVersionInfo))
-	ret, _, err := rtlGetVersion.Call(uintptr(unsafe.Pointer(&osVersionInfo)))
-	if ret != 0 {
-		fmt.Printf("RtlGetVersion failed: %v\n", err)
-		return
-	}
-	
-	osInfo := []OSInformation{{ Field0: fmt.Sprint(osVersionInfo.DwMajorVersion) , Field1: fmt.Sprint(osVersionInfo.DwMinorVersion), Field2: fmt.Sprint(osVersionInfo.DwBuildNumber)}}
-	
-	// Write to file
-	jsonData, err := json.Marshal(osInfo)
-	if err != nil {
-		fmt.Printf("Error marshaling to JSON: %v\n", err)
-		return
-	}
-	file, err := os.Create("lock.json")
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	defer file.Close()
-	_, err = file.Write(jsonData)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Println("[+] File lock.json generated.")
+    var osVersionInfo RTL_OSVERSIONINFOW
+    osVersionInfo.DwOSVersionInfoSize = uint32(unsafe.Sizeof(osVersionInfo))
+    ret, _, err := rtlGetVersion.Call(uintptr(unsafe.Pointer(&osVersionInfo)))
+    if ret != 0 {
+      fmt.Printf("RtlGetVersion failed: %v\n", err)
+      return
+  }
+  
+  osInfo := []OSInformation{{ Field0: fmt.Sprint(osVersionInfo.DwMajorVersion) , Field1: fmt.Sprint(osVersionInfo.DwMinorVersion), Field2: fmt.Sprint(osVersionInfo.DwBuildNumber)}}
+  
+  // Write to file
+  jsonData, err := json.Marshal(osInfo)
+  if err != nil {
+      fmt.Printf("Error marshaling to JSON: %v\n", err)
+      return
+  }
+  file, err := os.Create("lock.json")
+  if err != nil {
+      fmt.Println(err)
+      return
+  }
+  defer file.Close()
+  _, err = file.Write(jsonData)
+  if err != nil {
+      fmt.Println(err)
+      return
+  }
+  fmt.Println("[+] File lock.json generated.")
 }
