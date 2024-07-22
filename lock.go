@@ -23,9 +23,16 @@ const (
     offset_mappeddll uintptr = 0x1000
     SECTION_MAP_READ uintptr = 0x04
     DEBUG_PROCESS uint32 = 0x01
+    processparameters_offset = 0x20
+    commandline_offset = 0x68
+    MAXIMUM_ALLOWED uintptr = 0x02000000
 )
 
 var (
+    ntReadVirtualMemory *windows.LazyProc
+    ntQueryInformationProcess *windows.LazyProc
+    ntOpenSection *windows.LazyProc
+    ntGetNextProcess *windows.LazyProc
     rtlGetVersion *windows.LazyProc
     VirtualProtect *windows.LazyProc
     createFile *windows.LazyProc
@@ -34,9 +41,6 @@ var (
     DebugActiveProcessStop *windows.LazyProc
     TerminateProcess *windows.LazyProc
     CreateProcess *windows.LazyProc
-    ntReadVirtualMemory *windows.LazyProc
-    ntQueryInformationProcess *windows.LazyProc
-    ntOpenSection *windows.LazyProc
 )
 
 
@@ -110,6 +114,12 @@ type PROCESS_INFORMATION struct {
 
 
 func init() {
+    ntdll := windows.NewLazySystemDLL("ntdll.dll")
+    ntReadVirtualMemory = ntdll.NewProc("NtReadVirtualMemory")
+    ntQueryInformationProcess = ntdll.NewProc("NtQueryInformationProcess")
+    ntOpenSection = ntdll.NewProc("NtOpenSection")
+    ntGetNextProcess = ntdll.NewProc("NtGetNextProcess")
+    rtlGetVersion = ntdll.NewProc("RtlGetVersion")
     kernel32 := windows.NewLazySystemDLL("kernel32.dll")
     VirtualProtect = kernel32.NewProc("VirtualProtect")
     createFile = kernel32.NewProc("CreateFileA")
@@ -118,24 +128,6 @@ func init() {
     DebugActiveProcessStop = kernel32.NewProc("DebugActiveProcessStop")
     TerminateProcess = kernel32.NewProc("TerminateProcess")
     CreateProcess = kernel32.NewProc("CreateProcessW")
-    ntdll := windows.NewLazySystemDLL("ntdll.dll")
-    ntReadVirtualMemory = ntdll.NewProc("NtReadVirtualMemory")
-    ntQueryInformationProcess = ntdll.NewProc("NtQueryInformationProcess")
-    ntOpenSection = ntdll.NewProc("NtOpenSection")
-    rtlGetVersion = ntdll.NewProc("RtlGetVersion")
-}
-
-
-func read_remoteintptr(process_handle windows.Handle, base_address uintptr, size uintptr) uintptr {
-    buffer := make([]byte, size)
-    var bytesRead uintptr
-    status, _, _ := ntReadVirtualMemory.Call(uintptr(process_handle), base_address, uintptr(unsafe.Pointer(&buffer[0])), size, uintptr(unsafe.Pointer(&bytesRead)))
-    if status != 0 {
-        fmt.Printf("NtReadVirtualMemory failed with status: 0x%x\n", status)
-        return 0
-    }
-    read_value := *(*uintptr)(unsafe.Pointer(&buffer[0]))
-    return read_value
 }
 
 
@@ -148,14 +140,19 @@ func utf16BytesToUTF8(utf16Bytes []byte) []byte {
 }
 
 
-func read_remoteWStr(process_handle windows.Handle, base_address uintptr, size uintptr) string {
+func read_remoteintptr(process_handle uintptr, base_address uintptr, size uintptr) uintptr {
     buffer := make([]byte, size)
     var bytesRead uintptr
-    status, _, _ := ntReadVirtualMemory.Call(uintptr(process_handle), base_address, uintptr(unsafe.Pointer(&buffer[0])), size, uintptr(unsafe.Pointer(&bytesRead)))
-    if status != 0 {
-        fmt.Printf("NtReadVirtualMemory failed with status: 0x%x\n", status)
-        return ""
-    }
+    ntReadVirtualMemory.Call(uintptr(process_handle), base_address, uintptr(unsafe.Pointer(&buffer[0])), size, uintptr(unsafe.Pointer(&bytesRead)))
+    read_value := *(*uintptr)(unsafe.Pointer(&buffer[0]))
+    return read_value
+}
+
+
+func read_remoteWStr(process_handle uintptr, base_address uintptr, size uintptr) string {
+    buffer := make([]byte, size)
+    var bytesRead uintptr
+    ntReadVirtualMemory.Call(uintptr(process_handle), base_address, uintptr(unsafe.Pointer(&buffer[0])), size, uintptr(unsafe.Pointer(&bytesRead)))
     for i := 0; i < int(bytesRead)-1; i += 1 {
         if buffer[i] == 0x00 && buffer[i+1] == 0x00 {
             return string(utf16BytesToUTF8(buffer[:i+2]))
@@ -165,14 +162,53 @@ func read_remoteWStr(process_handle windows.Handle, base_address uintptr, size u
 }
 
 
-func get_local_lib_address(dll_name string) uintptr {
-    // GetCurrentProcess
-    process_handle, _ := windows.GetCurrentProcess()
-    // fmt.Printf("[+] Process Handle: \t%d\n", process_handle)
+func GetProcNameFromHandle(proc_handle uintptr) (string){
+    // NtQueryInformationProcess
     var pbi PROCESS_BASIC_INFORMATION
     var returnLength uint32
+    status, _, _ := ntQueryInformationProcess.Call(uintptr(proc_handle), ProcessBasicInformation, uintptr(unsafe.Pointer(&pbi)), uintptr(uint32(unsafe.Sizeof(pbi))), uintptr(unsafe.Pointer(&returnLength)),)
+    if status != 0 {
+        fmt.Printf("[-] NtQueryInformationProcess failed with status: 0x%x\n", status)
+        return ""
+    }
+    peb_addr := pbi.PebBaseAddress 
+
+    // Get PEB->ProcessParameters
+    processparameters_pointer := peb_addr + uintptr(processparameters_offset)
+    processparameters_adress := read_remoteintptr(proc_handle, processparameters_pointer, 8)
+
+    // Get ProcessParameters->CommandLine
+    commandline_pointer := processparameters_adress + uintptr(commandline_offset)
+    commandline_address := read_remoteintptr(proc_handle, commandline_pointer, 8)
+    commandline_value := read_remoteWStr(proc_handle, commandline_address, 256)
+    return commandline_value
+}
+
+
+func GetProcessByName(process_name string) uintptr{
+    var s uintptr = 0;
+    for {
+        res, _, _ := ntGetNextProcess.Call(s, MAXIMUM_ALLOWED, 0, 0, uintptr(unsafe.Pointer(&s)))
+        if (res != 0) {
+            break
+        }
+        aux_proc_name := GetProcNameFromHandle(s)
+        if (aux_proc_name == process_name){
+            return s
+        }
+    }
+    return 0
+}
+
+
+func get_local_lib_address(dll_name string) uintptr {
+    // Get current process handle
+    execPath, _ := os.Executable()
+    process_handle := GetProcessByName(execPath)
 
     // NtQueryInformationProcess
+    var pbi PROCESS_BASIC_INFORMATION
+    var returnLength uint32
     status, _, _ := ntQueryInformationProcess.Call(uintptr(process_handle), ProcessBasicInformation, uintptr(unsafe.Pointer(&pbi)), uintptr(uint32(unsafe.Sizeof(pbi))), uintptr(unsafe.Pointer(&returnLength)),)
     if status != 0 {
         fmt.Printf("NtQueryInformationProcess failed with status: 0x%x\n", status)
@@ -213,7 +249,8 @@ func get_local_lib_address(dll_name string) uintptr {
 
 
 func get_section_info(base_address uintptr) (uintptr,uintptr) {
-    process_handle, _ := windows.GetCurrentProcess()
+    execPath, _ := os.Executable()
+    process_handle := GetProcessByName(execPath)
     if (fmt.Sprintf("%d", process_handle) == ""){ return 0,0}
     var e_lfanew_addr uintptr = base_address + 0x3C
     var e_lfanew uintptr = read_remoteintptr(process_handle, e_lfanew_addr, 4)
