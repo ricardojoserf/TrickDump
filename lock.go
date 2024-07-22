@@ -34,13 +34,13 @@ var (
     ntOpenSection *windows.LazyProc
     ntGetNextProcess *windows.LazyProc
     rtlGetVersion *windows.LazyProc
-    VirtualProtect *windows.LazyProc
+    virtualProtect *windows.LazyProc
     createFile *windows.LazyProc
     createFileMapping *windows.LazyProc
     mapViewOfFile *windows.LazyProc
-    DebugActiveProcessStop *windows.LazyProc
-    TerminateProcess *windows.LazyProc
-    CreateProcess *windows.LazyProc
+    debugActiveProcessStop *windows.LazyProc
+    terminateProcess *windows.LazyProc
+    createProcess *windows.LazyProc
 )
 
 
@@ -121,13 +121,13 @@ func init() {
     ntGetNextProcess = ntdll.NewProc("NtGetNextProcess")
     rtlGetVersion = ntdll.NewProc("RtlGetVersion")
     kernel32 := windows.NewLazySystemDLL("kernel32.dll")
-    VirtualProtect = kernel32.NewProc("VirtualProtect")
+    virtualProtect = kernel32.NewProc("VirtualProtect")
     createFile = kernel32.NewProc("CreateFileA")
     createFileMapping = kernel32.NewProc("CreateFileMappingA")
     mapViewOfFile = kernel32.NewProc("MapViewOfFile")
-    DebugActiveProcessStop = kernel32.NewProc("DebugActiveProcessStop")
-    TerminateProcess = kernel32.NewProc("TerminateProcess")
-    CreateProcess = kernel32.NewProc("CreateProcessW")
+    debugActiveProcessStop = kernel32.NewProc("DebugActiveProcessStop")
+    terminateProcess = kernel32.NewProc("TerminateProcess")
+    createProcess = kernel32.NewProc("CreateProcessW")
 }
 
 
@@ -266,7 +266,7 @@ func replace_ntdll_section(unhooked_ntdll_text uintptr, local_ntdll_txt uintptr,
     fmt.Printf("[+] Copying %d bytes from 0x%s to 0x%s\n", local_ntdll_txt_size, fmt.Sprintf("%x", unhooked_ntdll_text), fmt.Sprintf("%x", local_ntdll_txt))
 
     var oldProtect uintptr
-    res, _, _ := VirtualProtect.Call(local_ntdll_txt, local_ntdll_txt_size, PAGE_EXECUTE_WRITECOPY, uintptr(unsafe.Pointer(&oldProtect)))
+    res, _, _ := virtualProtect.Call(local_ntdll_txt, local_ntdll_txt_size, PAGE_EXECUTE_WRITECOPY, uintptr(unsafe.Pointer(&oldProtect)))
     if res != 1 {
         fmt.Println("Failed to change memory protection to PAGE_EXECUTE_WRITECOPY")
         return
@@ -278,7 +278,7 @@ func replace_ntdll_section(unhooked_ntdll_text uintptr, local_ntdll_txt uintptr,
     }
     /// fmt.Scanln()
     // Restore the original protection
-    res, _, _ = VirtualProtect.Call(local_ntdll_txt, local_ntdll_txt_size, oldProtect, uintptr(unsafe.Pointer(&oldProtect)))
+    res, _, _ = virtualProtect.Call(local_ntdll_txt, local_ntdll_txt_size, oldProtect, uintptr(unsafe.Pointer(&oldProtect)))
     if res != 1 {
         fmt.Println("Failed to restore the original memory protection")
         return
@@ -371,7 +371,7 @@ func overwrite_debugproc(file_path string, local_ntdll_txt uintptr, local_ntdll_
     si.cb = uint32(unsafe.Sizeof(si))
     applicationName := windows.StringToUTF16Ptr(file_path)
 
-    success, _, err := CreateProcess.Call(uintptr(unsafe.Pointer(applicationName)), 0, 0, 0, 0, uintptr(DEBUG_PROCESS), 0, 0, uintptr(unsafe.Pointer(&si)), uintptr(unsafe.Pointer(&pi)))   
+    success, _, err := createProcess.Call(uintptr(unsafe.Pointer(applicationName)), 0, 0, 0, 0, uintptr(DEBUG_PROCESS), 0, 0, uintptr(unsafe.Pointer(&si)), uintptr(unsafe.Pointer(&pi)))   
     if (success != 1) {
         fmt.Printf("CreateProcess failed: %v\n", err)
         os.Exit(0)
@@ -387,8 +387,8 @@ func overwrite_debugproc(file_path string, local_ntdll_txt uintptr, local_ntdll_
     }
 
     // TerminateProcess + DebugActiveProcessStop
-    tp_bool, _, _ := TerminateProcess.Call(uintptr(pi.hProcess), 0)
-    daps_bool, _, _ := DebugActiveProcessStop.Call(uintptr(pi.dwProcessId))
+    tp_bool, _, _ := terminateProcess.Call(uintptr(pi.hProcess), 0)
+    daps_bool, _, _ := debugActiveProcessStop.Call(uintptr(pi.dwProcessId))
     if (tp_bool != 1){
         fmt.Printf("[-] TerminateProcess failed")
         os.Exit(0)
