@@ -321,6 +321,9 @@ def main():
     # Get process handle
     process_handle = GetProcessByName(process_name)
     print("[+] Process handle: \t" + str(process_handle.value))
+    if process_handle is None:
+        print("[-] It was not possible to get a process handle")
+        sys.exit(0)
 
     # Loop memory regions
     mem_address = 0
