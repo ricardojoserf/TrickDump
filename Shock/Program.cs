@@ -334,6 +334,10 @@ namespace Shock
             // Get process handle
             IntPtr processHandle = GetProcessByName(proc_name);
             Console.WriteLine("[+] Process handle:  \t\t\t\t" + processHandle);
+            if (processHandle == IntPtr.Zero) {
+                Console.WriteLine("[-] It was not possible to get a process handle. If you get 0xC0000022 errors probably PEB is unreadable.");
+                Environment.Exit(-1);
+            }
 
             // List to get modules information
             List<ModuleInformation> moduleInformationList = CustomGetModuleHandle(processHandle);
@@ -400,6 +404,13 @@ namespace Shock
 
         static void Main(string[] args)
         {
+            // Check binary is correctly compiled
+            if (!Environment.Is64BitProcess)
+            {
+                Console.WriteLine("[-] File must be compiled as 64-byte binary.");
+                Environment.Exit(-1);
+            }
+
             // Replace ntdll library
             string option = "default";
             string wildcard_option = "";
