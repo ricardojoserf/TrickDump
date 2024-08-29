@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Runtime.InteropServices;
-using static Lock.NT;
 
 
 namespace Lock
@@ -79,19 +78,6 @@ namespace Lock
 
         static void Main(string[] args)
         {
-            // Replace ntdll library
-            string option = "default";
-            string wildcard_option = "";
-            if (args.Length >= 1)
-            {
-                option = args[0];
-            }
-            if (args.Length >= 2)
-            {
-                wildcard_option = args[1];
-            }
-            ReplaceLibrary(option, wildcard_option);
-
             // Get OS information. Argument: Name of JSON file
             Lock("lock.json");
         }

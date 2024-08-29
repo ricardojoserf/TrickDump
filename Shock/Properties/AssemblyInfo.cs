@@ -5,11 +5,11 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("Shock")]
+[assembly: AssemblyTitle("Shock_Alternative")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("Shock")]
+[assembly: AssemblyProduct("Shock_Alternative")]
 [assembly: AssemblyCopyright("Copyright ©  2024")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
@@ -20,7 +20,7 @@ using System.Runtime.InteropServices;
 [assembly: ComVisible(false)]
 
 // The following GUID is for the ID of the typelib if this project is exposed to COM
-[assembly: Guid("d8fc3807-ceaa-4f6a-9c8f-cc96f99d1f04")]
+[assembly: Guid("7a4b0afe-8f2e-4b96-8ab1-79d0ab2a588e")]
 
 // Version information for an assembly consists of the following four values:
 //

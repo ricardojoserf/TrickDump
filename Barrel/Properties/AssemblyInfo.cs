@@ -5,11 +5,11 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("Barrel")]
+[assembly: AssemblyTitle("Barrel_Alternative")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("Barrel")]
+[assembly: AssemblyProduct("Barrel_Alternative")]
 [assembly: AssemblyCopyright("Copyright ©  2024")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
@@ -20,7 +20,7 @@ using System.Runtime.InteropServices;
 [assembly: ComVisible(false)]
 
 // The following GUID is for the ID of the typelib if this project is exposed to COM
-[assembly: Guid("9e9bb94c-1fbe-4d0b-83b7-e42c83fc5d45")]
+[assembly: Guid("4b650e1b-fcaf-412c-90b9-676f73e0b996")]
 
 // Version information for an assembly consists of the following four values:
 //
