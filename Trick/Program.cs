@@ -420,22 +420,20 @@ namespace Trick
 
         public static void GenerateTrickZip(string zipFilePath, string lock_str, string shock_str, string barrel_str, List<MemFile> barrel_memfiles, string ip_addr, string port)
         {
-            // Check it exists, delete if it does
-            if (File.Exists(zipFilePath)) { File.Delete(zipFilePath); }
-
             // Generate ZIP file
             if (ip_addr == "" || port == "")
             {
+                // Check it exists, delete if it does
+                if (File.Exists(zipFilePath)) { File.Delete(zipFilePath); }
+
                 using (FileStream zipStream = new FileStream(zipFilePath, FileMode.Create))
                 {
-                    using (System.IO.Compression.ZipArchive archive = new System.IO.Compression.ZipArchive(zipStream, ZipArchiveMode.Create, true))
+                    using (ZipArchive archive = new ZipArchive(zipStream, ZipArchiveMode.Create, true))
                     {
                         AddStringToZip(archive, "lock.json", lock_str);
                         AddStringToZip(archive, "shock.json", shock_str);
                         AddStringToZip(archive, "barrel.json", barrel_str);
-
                         ZipArchiveEntry innerZipEntry = archive.CreateEntry("barrel.zip");
-
                         using (Stream innerZipStream = innerZipEntry.Open())
                         {
                             using (System.IO.Compression.ZipArchive innerArchive = new System.IO.Compression.ZipArchive(innerZipStream, ZipArchiveMode.Create))
@@ -450,7 +448,6 @@ namespace Trick
                                 }
                             }
                         }
-
                     }
                 }
                 Console.WriteLine("[+] File " + zipFilePath + " generated.");
@@ -465,9 +462,7 @@ namespace Trick
                         AddStringToZip(archive, "lock.json", lock_str);
                         AddStringToZip(archive, "shock.json", shock_str);
                         AddStringToZip(archive, "barrel.json", barrel_str);
-
                         ZipArchiveEntry innerZipEntry = archive.CreateEntry("barrel.zip");
-
                         using (Stream innerZipStream = innerZipEntry.Open())
                         {
                             using (System.IO.Compression.ZipArchive innerArchive = new System.IO.Compression.ZipArchive(innerZipStream, ZipArchiveMode.Create))
