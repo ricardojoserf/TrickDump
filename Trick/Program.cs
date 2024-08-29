@@ -495,7 +495,6 @@ namespace Trick
         {
             // Replace ntdll library
             string option = "default";
-            string wildcard_option = "";
             string ip_addr = "";
             string port = "";
             if (args.Length >= 1)
@@ -504,17 +503,13 @@ namespace Trick
             }
             if (args.Length >= 2)
             {
-                wildcard_option = args[1];
+                ip_addr = args[1];
             }
             if (args.Length >= 3)
             {
-                ip_addr = args[2];
+                port = args[2];
             }
-            if (args.Length >= 4)
-            {
-                port = args[3];
-            }
-            ReplaceLibrary(option, wildcard_option);
+            ReplaceLibrary(option, "");
 
             // Check binary is correctly compiled
             if (!Environment.Is64BitProcess)
