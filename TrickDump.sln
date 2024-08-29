@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shock", "Shock\Shock.csproj
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Barrel", "Barrel\Barrel.csproj", "{9E9BB94C-1FBE-4D0B-83B7-E42C83FC5D45}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Trick", "Trick\Trick.csproj", "{B92B6B67-C7C8-4548-85EE-A215D74C000D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -39,8 +41,16 @@ Global
 		{9E9BB94C-1FBE-4D0B-83B7-E42C83FC5D45}.Debug|x64.Build.0 = Debug|Any CPU
 		{9E9BB94C-1FBE-4D0B-83B7-E42C83FC5D45}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{9E9BB94C-1FBE-4D0B-83B7-E42C83FC5D45}.Release|Any CPU.Build.0 = Release|Any CPU
-		{9E9BB94C-1FBE-4D0B-83B7-E42C83FC5D45}.Release|x64.ActiveCfg = Release|Any CPU
-		{9E9BB94C-1FBE-4D0B-83B7-E42C83FC5D45}.Release|x64.Build.0 = Release|Any CPU
+		{9E9BB94C-1FBE-4D0B-83B7-E42C83FC5D45}.Release|x64.ActiveCfg = Release|x64
+		{9E9BB94C-1FBE-4D0B-83B7-E42C83FC5D45}.Release|x64.Build.0 = Release|x64
+		{B92B6B67-C7C8-4548-85EE-A215D74C000D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B92B6B67-C7C8-4548-85EE-A215D74C000D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B92B6B67-C7C8-4548-85EE-A215D74C000D}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{B92B6B67-C7C8-4548-85EE-A215D74C000D}.Debug|x64.Build.0 = Debug|Any CPU
+		{B92B6B67-C7C8-4548-85EE-A215D74C000D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B92B6B67-C7C8-4548-85EE-A215D74C000D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B92B6B67-C7C8-4548-85EE-A215D74C000D}.Release|x64.ActiveCfg = Release|x64
+		{B92B6B67-C7C8-4548-85EE-A215D74C000D}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
