@@ -38,3 +38,18 @@ python3 create_dump.py [-l LOCK_JSON] [-s SHOCK_JSON] [-b BARREL_JSON] [-z BARRE
 ```
 
 ![img4](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_go4.png)
+
+
+-------------------------
+
+## All in one
+
+If you prefer to execute only one program, trick.go generates a ZIP file containing the 3 JSON files and the ZIP file with the memory regions:
+
+```
+go run trick.go [-o OPTION] [-p PATH]
+```
+
+You can create the ZIP file locally, optionally using a Ntdll overwrite method:
+
+![img5](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_go5.png)
