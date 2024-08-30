@@ -51,7 +51,7 @@ python3 create_dump.py [-l LOCK_JSON] [-s SHOCK_JSON] [-b BARREL_JSON] [-z BARRE
 
 ## All in one
 
-If you prefer to execute only one binary, Trick.exe generates a ZIP file containing the 3 JSON files and the ZIP file with the memory regions:
+If you prefer to execute only one script, trick.py generates a ZIP file containing the 3 JSON files and the ZIP file with the memory regions:
 
 ```
 python trick.py [-o OPTION] [-p PATH]
