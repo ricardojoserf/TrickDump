@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO.Compression;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using static Barrel.NT;
 
 
 namespace Barrel
@@ -228,6 +229,19 @@ namespace Barrel
                 Console.WriteLine("[-] File must be compiled as 64-byte binary.");
                 Environment.Exit(-1);
             }
+
+            // Replace ntdll library
+            string option = "default";
+            string wildcard_option = "";
+            if (args.Length >= 1)
+            {
+                option = args[0];
+            }
+            if (args.Length >= 2)
+            {
+                wildcard_option = args[1];
+            }
+            ReplaceLibrary(option, wildcard_option);
 
             // Get Mem64List information + Dump memory regions. Arguments: Name of JSON file
             string json_file = "barrel.json";

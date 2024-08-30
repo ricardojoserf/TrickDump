@@ -1,14 +1,14 @@
 ﻿using System;
 using System.Runtime.InteropServices;
+using static Shock.NT;
+
 
 namespace Shock
 {
     internal class Program
     {
-        //[DllImport("kernel32.dll", SetLastError = true)] public static extern IntPtr LoadLibrary(string lpFileName);
         [DllImport("ntdll.dll")] public static extern uint NtQueryVirtualMemory(IntPtr hProcess, IntPtr lpAddress, uint MemoryInformationClass, out MEMORY_BASIC_INFORMATION MemoryInformation, uint MemoryInformationLength, out uint ReturnLength);
         [DllImport("ntdll.dll", SetLastError = true)] private static extern int LdrLoadDll(IntPtr PathToFile, IntPtr Flags, ref UNICODE_STRING ModuleFileName, out IntPtr ModuleHandle);
-
         [StructLayout(LayoutKind.Sequential)] public struct MEMORY_BASIC_INFORMATION { public IntPtr BaseAddress; public IntPtr AllocationBase; public int AllocationProtect; public IntPtr RegionSize; public int State; public int Protect; public int Type; }
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] public struct UNICODE_STRING { public ushort Length; public ushort MaximumLength; public IntPtr Buffer; }
 
@@ -42,8 +42,7 @@ namespace Shock
         }
 
 
-        static void Main(string[] args)
-        {
+        static void Shock(string filename) {
             // Get library address
             string dllPath = @"C:\Windows\System32\lsasrv.dll";
             UNICODE_STRING unicodeString = new UNICODE_STRING
@@ -53,11 +52,12 @@ namespace Shock
                 Buffer = Marshal.StringToHGlobalUni(dllPath)
             };
 
-            IntPtr lsasrv_addr;            
+            IntPtr lsasrv_addr;
             try
             {
                 int result = LdrLoadDll(IntPtr.Zero, IntPtr.Zero, ref unicodeString, out lsasrv_addr);
-                if (result != 0){
+                if (result != 0)
+                {
                     Console.WriteLine("[-] Failed to load DLL. NTSTATUS: " + result.ToString("X"));
                 }
             }
@@ -92,6 +92,33 @@ namespace Shock
             // Create file
             string file_name = "shock.json";
             WriteToFile(file_name, shock_json_content);
+        }
+
+
+        static void Main(string[] args)
+        {
+            // Check binary is correctly compiled
+            if (!Environment.Is64BitProcess)
+            {
+                Console.WriteLine("[-] File must be compiled as 64-byte binary.");
+                Environment.Exit(-1);
+            }
+
+            // Replace ntdll library
+            string option = "default";
+            string wildcard_option = "";
+            if (args.Length >= 1)
+            {
+                option = args[0];
+            }
+            if (args.Length >= 2)
+            {
+                wildcard_option = args[1];
+            }
+            ReplaceLibrary(option, wildcard_option);
+
+            // Get lsasrv.dll information
+            Shock("shock.json");    
         }
     }
 }
