@@ -23,7 +23,9 @@ The benefits of this technique are:
 - There is never a valid Minidump file in disk, memory or the network traffic.
 
 - There is not a single program or process executing the whole attack but three separate ones, which may raise less flags.
+  - If you prefer to run only one program you can use [Trick](#all-in-one).
   - If you already have information about the OS of the target machine you can skip the first step ("Lock").
+  
 
 - The programs only use NTAPIS (this project is a variant of [NativeDump](https://github.com/ricardojoserf/NativeDump)).
 
