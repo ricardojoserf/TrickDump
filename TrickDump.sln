@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shock", "Shock\Shock.csproj
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Barrel", "Barrel\Barrel.csproj", "{4B650E1B-FCAF-412C-90B9-676F73E0B996}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Trick", "Trick\Trick.csproj", "{6F3DA7AB-E442-4DD4-AE68-0C7FFE2FBD23}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -41,6 +43,14 @@ Global
 		{4B650E1B-FCAF-412C-90B9-676F73E0B996}.Release|Any CPU.Build.0 = Release|Any CPU
 		{4B650E1B-FCAF-412C-90B9-676F73E0B996}.Release|x64.ActiveCfg = Release|x64
 		{4B650E1B-FCAF-412C-90B9-676F73E0B996}.Release|x64.Build.0 = Release|x64
+		{6F3DA7AB-E442-4DD4-AE68-0C7FFE2FBD23}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6F3DA7AB-E442-4DD4-AE68-0C7FFE2FBD23}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6F3DA7AB-E442-4DD4-AE68-0C7FFE2FBD23}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{6F3DA7AB-E442-4DD4-AE68-0C7FFE2FBD23}.Debug|x64.Build.0 = Debug|Any CPU
+		{6F3DA7AB-E442-4DD4-AE68-0C7FFE2FBD23}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6F3DA7AB-E442-4DD4-AE68-0C7FFE2FBD23}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6F3DA7AB-E442-4DD4-AE68-0C7FFE2FBD23}.Release|x64.ActiveCfg = Release|x64
+		{6F3DA7AB-E442-4DD4-AE68-0C7FFE2FBD23}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
