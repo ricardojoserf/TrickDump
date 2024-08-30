@@ -53,3 +53,7 @@ go run trick.go [-o OPTION] [-p PATH]
 You can create the ZIP file locally, optionally using a Ntdll overwrite method:
 
 ![img5](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_go5.png)
+
+You get a ZIP file like this, unzip it and create the Minidump file with the *create_dump.py* script:
+
+![img7](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_7.png)
