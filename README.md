@@ -79,7 +79,7 @@ Then the Minidump file is generated:
 If you prefer to execute only one binary, Trick.exe generates a ZIP file containing the 3 JSON files and the ZIP file with the memory regions:
 
 ```
-Lock.exe [disk/knowndlls/debugproc] [IP_ADDRESS] [PORT]
+Trick.exe [disk/knowndlls/debugproc] [IP_ADDRESS] [PORT]
 ```
 
 You can create the ZIP file locally, optionally using a Ntdll overwrite method:
