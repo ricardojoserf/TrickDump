@@ -488,7 +488,7 @@ namespace Trick
             {
                 port = args[2];
             }
-            ReplaceLibrary(ntdll_option);
+            ReplaceLibrary(ntdll_option, "");
 
             // Check binary is correctly compiled
             if (!Environment.Is64BitProcess)
