@@ -5,5 +5,6 @@ Work in progress...
 - [x] Lock
 - [x] Shock
 - [x] Barrel
-- [ ] Ntdll overwrite
-- [ ] Translate functions
+- [x] Ntdll overwrite
+- [ ] Dynamic function resolution
+- [ ] Clean
