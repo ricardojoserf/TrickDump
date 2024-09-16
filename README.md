@@ -4,4 +4,6 @@ Work in progress...
 
 - [x] Lock
 - [x] Shock
-- [ ] Barrel
+- [x] Barrel
+- [ ] Ntdll overwrite
+- [ ] Translate functions

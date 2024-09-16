@@ -7,6 +7,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Lock", "Lock\Lock.vcxproj",
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Shock", "Shock\Shock.vcxproj", "{6554657B-2CC0-447F-A0CE-116988BC680F}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Barrel", "Barrel\Barrel.vcxproj", "{C3E4FF89-B4CC-4169-918A-0C00168702BB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -31,6 +33,14 @@ Global
 		{6554657B-2CC0-447F-A0CE-116988BC680F}.Release|x64.Build.0 = Release|x64
 		{6554657B-2CC0-447F-A0CE-116988BC680F}.Release|x86.ActiveCfg = Release|Win32
 		{6554657B-2CC0-447F-A0CE-116988BC680F}.Release|x86.Build.0 = Release|Win32
+		{C3E4FF89-B4CC-4169-918A-0C00168702BB}.Debug|x64.ActiveCfg = Debug|x64
+		{C3E4FF89-B4CC-4169-918A-0C00168702BB}.Debug|x64.Build.0 = Debug|x64
+		{C3E4FF89-B4CC-4169-918A-0C00168702BB}.Debug|x86.ActiveCfg = Debug|Win32
+		{C3E4FF89-B4CC-4169-918A-0C00168702BB}.Debug|x86.Build.0 = Debug|Win32
+		{C3E4FF89-B4CC-4169-918A-0C00168702BB}.Release|x64.ActiveCfg = Release|x64
+		{C3E4FF89-B4CC-4169-918A-0C00168702BB}.Release|x64.Build.0 = Release|x64
+		{C3E4FF89-B4CC-4169-918A-0C00168702BB}.Release|x86.ActiveCfg = Release|Win32
+		{C3E4FF89-B4CC-4169-918A-0C00168702BB}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
