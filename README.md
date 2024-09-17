@@ -41,7 +41,7 @@ If you prefer to execute only one binary, Trick.exe generates a ZIP file contain
 Trick.exe [disk/knowndlls/debugproc]
 ```
 
-It creates the ZIP file locally, optionally using a Ntdll overwrite method:
+It creates the ZIP file locally, optionally using a ntdll.dll overwrite method:
 
 ![img5](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_C4.png)
 
