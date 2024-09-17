@@ -6,5 +6,6 @@ Work in progress...
 - [x] Shock
 - [x] Barrel
 - [x] Ntdll overwrite
+- [x] Trick
 - [ ] Dynamic function resolution
 - [ ] Clean
