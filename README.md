@@ -36,7 +36,7 @@ The benefits of this technique are:
   - "knowndlls": Using the KnownDlls folder.
   - "debugproc": Using a process created in debug mode. If a second argument is not used the process is "c:\windows\system32\calc.exe".
 
-It comes in three flavours:
+It comes in four flavours:
 
 - .NET: The main branch
 - Python: The [python-flavour branch](https://github.com/ricardojoserf/TrickDump/tree/python-flavour)
