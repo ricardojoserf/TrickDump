@@ -7,5 +7,5 @@ Work in progress...
 - [x] Barrel
 - [x] Ntdll overwrite
 - [x] Trick
-- [ ] Dynamic function resolution
-- [ ] Clean
+- [x] Dynamic function resolution
+- [x] Clean

