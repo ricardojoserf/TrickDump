@@ -421,7 +421,7 @@ void GenerateZip(const char* zipFilePath, MemFile memfile_list[], int memfile_co
 }
 
 
-BarrelResults Barrel(const char* filename, const char* zip_filename, LPVOID hProcess) {
+BarrelResults Barrel(LPVOID hProcess) {
     // Initialize variables
     BarrelResults results;
     long long proc_max_address_l = 0x7FFFFFFEFFFF;
@@ -1192,7 +1192,7 @@ int main(int argc, char* argv[]) {
     // printf("osvi: %d\n", osvi.dwMajorVersion);
     LPVOID hProcess = NULL;
     char* shock_json = Shock(&hProcess);
-    BarrelResults barrel_results = Barrel(barrel_filename, barrel_zip_filename, hProcess);
+    BarrelResults barrel_results = Barrel(hProcess);
     
     // printf("%s\n", lock_json);
     // printf("%s\n", shock_json);
