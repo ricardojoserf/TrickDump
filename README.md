@@ -18,7 +18,7 @@ You can execute the programs directly without overwriting the ntdll.dll library:
 
 ![img1](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_C1.png)
 
-Or use one of the three different overwrite techniques:
+Or use one of the three different overwrite techniques ("disk", "knowndlls" or "debugproc"):
 
 ![img2](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_C2.png)
 
@@ -38,7 +38,7 @@ python3 create_dump.py [-l LOCK_JSON] [-s SHOCK_JSON] [-b BARREL_JSON] [-z BARRE
 If you prefer to execute only one binary, Trick.exe generates a ZIP file containing the 3 JSON files and the ZIP file with the memory regions:
 
 ```
-Trick.exe [disk/knowndlls/debugproc] [IP_ADDRESS] [PORT]
+Trick.exe [disk/knowndlls/debugproc]
 ```
 
 It creates the ZIP file locally, optionally using a Ntdll overwrite method:
