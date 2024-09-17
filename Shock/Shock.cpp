@@ -10,6 +10,12 @@
 #define DEBUG_PROCESS 0x00000001
 
 
+// Enums
+typedef enum _PROCESSINFOCLASS {
+    ProcessBasicInformation = 0,
+} PROCESSINFOCLASS;
+
+
 // Structs
 typedef struct _TOKEN_PRIVILEGES_STRUCT {
     DWORD PrivilegeCount;
@@ -38,12 +44,6 @@ typedef struct _OBJECT_ATTRIBUTES {
     PVOID SecurityDescriptor;
     PVOID SecurityQualityOfService;
 } OBJECT_ATTRIBUTES, * POBJECT_ATTRIBUTES;
-
-
-// Enums
-typedef enum _PROCESSINFOCLASS {
-    ProcessBasicInformation = 0,
-} PROCESSINFOCLASS;
 
 
 // Functions
@@ -81,6 +81,7 @@ NtReadVirtualMemoryFn NtReadVirtualMemory;
 NtQueryVirtualMemory_t NtQueryVirtualMemory;
 NtOpenSectionFn NtOpenSection;
 NtCloseFn NtClose;
+
 
 // Skeletons
 char* GetProcNameFromHandle(HANDLE handle);
@@ -288,19 +289,6 @@ char* GetProcNameFromHandle(HANDLE process_handle) {
     PVOID commandline_pointer = (PVOID)((BYTE*)processparameters_address + commandline_offset);
     PVOID commandline_address = ReadRemoteIntPtr(process_handle, commandline_pointer);
     char* commandline_value = ReadRemoteWStr(process_handle, commandline_address);
-
-    /*
-    // DEBUG
-    printf("[+] pbi_addr: %p \n", pbi_addr);
-    printf("[+] return length: %d \n", returnLength);
-    printf("[+] peb pointer: %p\n", peb_pointer);
-    printf("[+] peb address: %p\n", pebaddress);
-    printf("[+] processparameters_pointer: %p\n", processparameters_pointer);
-    printf("[+] processparameters_address: %p\n", processparameters_address);
-    printf("[+] commandline_pointer: %p\n", commandline_pointer);
-    printf("[+] commandline_address: %p\n", commandline_address);
-    printf("[+] commandline_value: %s\n\n\n\n", commandline_value);
-    */
 
     return commandline_value;
 }

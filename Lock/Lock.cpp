@@ -1,9 +1,12 @@
 #include <stdio.h>
 #include <windows.h>
 
+
+// Constants
 #define SECTION_MAP_READ 0x0004
 #define OBJ_CASE_INSENSITIVE 0x00000040
 #define DEBUG_PROCESS 0x00000001
+
 
 // Enums
 typedef enum _PROCESSINFOCLASS {

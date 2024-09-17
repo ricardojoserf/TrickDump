@@ -301,15 +301,6 @@ int Barrel() {
 
         // If readable and committed -> Write memory region to a file
         if (mbi.Protect != PAGE_NOACCESS && mbi.State == MEM_COMMIT) {
-            /*
-            // Allocate buffer for memory content
-            unsigned char* buffer = (unsigned char*) malloc(mbi.RegionSize);
-            if (!buffer) {
-                printf("Memory allocation failed\n");
-                return 1;
-            }
-            */
-
             // Generate random filename
             char memdump_filename[14];
             getRandomString(memdump_filename, 10);
@@ -335,6 +326,7 @@ int Barrel() {
 
             // Format each JSON item: {"string", "0xVALUE1", "VALUE2"}
             sprintf_s(json_item, "{\"field0\":\"%s\", \"field1\":\"0x%p\", \"field2\":\"%d\"}, ", memdump_filename, mem_address, mbi.RegionSize);
+            
             // Append the JSON item to the final JSON array
             strcat_s(json_output, json_item);
 
@@ -357,10 +349,6 @@ int Barrel() {
     json_output[len - 2] = '\0';
     strcat_s(json_output, "]");
 
-    // Print the resulting JSON array
-    // printf("4");
-    // printf("%s\n", json_output);
-
     // Write to file
     char filename[] = "barrel.json";
     FILE* file;
@@ -373,21 +361,7 @@ int Barrel() {
     fclose(file);
     printf("[+] File %s generated.\n", filename);
 
-    /*
-    for (int i = 0; i < memfile_count; i++) {
-        MemFile memFile = memfile_list[i];
-
-        // Print filename
-        printf("%d Filename: %s\tSize: %zu bytes", i, memFile.filename, memFile.size);
-        // Print the first few bytes (let's print up to 10 bytes or less if content is smaller)
-        printf("\tFirst bytes: ");
-        for (size_t j = 0; j < memFile.size && j < 10; j++) {
-            printf("%02X ", memFile.content[j]);
-        }
-        printf("\n");
-    }
-    */
-
+    // Create ZIP file
     GenerateZip("barrel.zip", memfile_list, memfile_count);
 }
 
