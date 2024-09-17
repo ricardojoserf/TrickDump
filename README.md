@@ -41,7 +41,7 @@ It comes in three flavours:
 - .NET: The main branch
 - Python: The [python-flavour branch](https://github.com/ricardojoserf/TrickDump/tree/python-flavour)
 - Golang: The [golang-flavour branch](https://github.com/ricardojoserf/TrickDump/tree/golang-flavour)
-- C: The [c-flavour branch](https://github.com/ricardojoserf/TrickDump/tree/c-flavour) (Work in progress!!!)
+- C/C++: The [c-flavour branch](https://github.com/ricardojoserf/TrickDump/tree/c-flavour)
 
 
 It will not work if PPL is enabled, ~~the PEB structure is unreadable~~ or the binaries are not compiled as 64-bit. **Update**: Now it is possible to execute the programs without reading the PEB, check the [peb-unreadable branch](https://github.com/ricardojoserf/TrickDump/tree/peb-unreadable) :)
