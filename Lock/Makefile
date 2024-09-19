@@ -1,3 +1,4 @@
+# Source: https://github.com/rvrsh3ll/BOF_Collection
 SRC = $(wildcard *.c)
 OBJS = $(patsubst %.c, %.o, $(SRC))
 CC_x64 := x86_64-w64-mingw32-gcc
