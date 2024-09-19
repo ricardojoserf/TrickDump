@@ -1,0 +1,13 @@
+on beacon_output {
+    local('$filename', '$output');
+
+    # Capture the output and file name
+    $output = $3;
+    $filename = "output.txt";
+
+    # Append the Beacon output to the file
+    boutput($output, $filename);
+
+    # Print a confirmation message
+    println("[+] Output saved to " . $filename);
+}
