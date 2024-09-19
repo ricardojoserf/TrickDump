@@ -36,12 +36,13 @@ The benefits of this technique are:
   - "knowndlls": Using the KnownDlls folder.
   - "debugproc": Using a process created in debug mode. If a second argument is not used the process is "c:\windows\system32\calc.exe".
 
-It comes in four flavours:
+It comes in five flavours:
 
 - .NET: The main branch
 - Python: The [python-flavour branch](https://github.com/ricardojoserf/TrickDump/tree/python-flavour)
 - Golang: The [golang-flavour branch](https://github.com/ricardojoserf/TrickDump/tree/golang-flavour)
-- C/C++: The [c-flavour branch](https://github.com/ricardojoserf/TrickDump/tree/c-flavour)
+- C/C++:  The [c-flavour branch](https://github.com/ricardojoserf/TrickDump/tree/c-flavour)
+- BOF files: The [bof-flavour branch](https://github.com/ricardojoserf/TrickDump/tree/c-flavour) (Work in progress!!!)
 
 
 It will not work if PPL is enabled, ~~the PEB structure is unreadable~~ or the binaries are not compiled as 64-bit. **Update**: Now it is possible to execute the programs without reading the PEB, check the [peb-unreadable branch](https://github.com/ricardojoserf/TrickDump/tree/peb-unreadable) :)
