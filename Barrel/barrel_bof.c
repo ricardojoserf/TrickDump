@@ -242,37 +242,22 @@ int MyStrCmp(const char* s1, const char* s2) {
 }
 
 
-void MyIntToHexStr(int value, char* buffer) {
-    char temp[9];  // Temporary buffer for hex digits (8 digits for 32-bit + 1 null terminator)
-    int i = 0;
-    
-    // Process each nibble (4 bits) of the integer
-    for (int j = 28; j >= 0; j -= 4) {
-        int nibble = (value >> j) & 0xF;  // Extract the nibble (4 bits)
+void MyIntToHexStr(long long value, char* buffer) {
+    int i;
+    for (i = 11; i >= 0; i--) {
+        int nibble = value & 0xF;  // Get the last 4 bits (1 nibble)
         
-        // Convert nibble to corresponding hex character
+        // Convert the nibble to a hex character
         if (nibble < 10) {
-            temp[i++] = '0' + nibble;
+            buffer[i] = '0' + nibble;
         } else {
-            temp[i++] = 'A' + (nibble - 10);
+            buffer[i] = 'A' + (nibble - 10);
         }
+
+        value >>= 4;  // Shift right by 4 bits to process the next nibble
     }
 
-    temp[i] = '\0';  // Null-terminate the string
-
-    // Remove leading zeros by copying to buffer
-    char* temp_ptr = temp;
-    while (*temp_ptr == '0' && *(temp_ptr + 1) != '\0') {
-        temp_ptr++;
-    }
-
-    // Copy the final hex string to the output buffer
-    int j = 0;
-    while (temp_ptr[j] != '\0') {
-        buffer[j] = temp_ptr[j];
-        j++;
-    }
-    buffer[j] = '\0';  // Null-terminate the final string
+    buffer[12] = '\0';  // Null-terminate the string
 }
 
 
@@ -484,7 +469,7 @@ char* get_json(MemFile* memfile_list, int memfile_count){
             json_output = concatenate_strings(json_output, ", ");    
         }
         char* base_buffer[12];
-        MyIntToHexStr(memfile_list[i].address, base_buffer);
+        MyIntToHexStr((long long) memfile_list[i].address, base_buffer);
         char* size_buffer[12];
         MyIntToStr(memfile_list[i].size, size_buffer);
         char* json_part_1 = create_string_with_var("{\"field0\":\"", memfile_list[i].filename, "\",");
@@ -579,12 +564,12 @@ void Barrel(){
             // memFile.content = (unsigned char*)KERNEL32$HeapAlloc(hHeap, HEAP_ZERO_MEMORY, regionSize);
             // MyStrcpy((unsigned char*)memFile.content, buffer, regionSize);
 
-            BeaconPrintf(CALLBACK_OUTPUT, "[+] Address: 0x%14X\tName: %s\n", mem_address, random_name);
+            //// BeaconPrintf(CALLBACK_OUTPUT, "[+] Address: 0x%14X\tName: %s\n", mem_address, random_name);
             for (size_t i = 0; i < 16; i++) {
                 unsigned char* test = (unsigned char*) buffer;
-                BeaconPrintf(CALLBACK_OUTPUT, "%02X ", test[i]);  // Print each byte in hexadecimal (02X ensures two digits with leading zero)
+                ////// BeaconPrintf(CALLBACK_OUTPUT, "%02X ", test[i]);  // Print each byte in hexadecimal (02X ensures two digits with leading zero)
             }
-            BeaconPrintf(CALLBACK_OUTPUT, "\n");
+            ///// BeaconPrintf(CALLBACK_OUTPUT, "\n");
 
             memFile.size = mbi.RegionSize;
             memFile.address = mem_address;

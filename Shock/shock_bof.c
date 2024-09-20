@@ -370,37 +370,23 @@ int MyStrCmp(const char* s1, const char* s2) {
 }
 
 
-void MyIntToHexStr(int value, char* buffer) {
-    char temp[9];  // Temporary buffer for hex digits (8 digits for 32-bit + 1 null terminator)
-    int i = 0;
-    
-    // Process each nibble (4 bits) of the integer
-    for (int j = 28; j >= 0; j -= 4) {
-        int nibble = (value >> j) & 0xF;  // Extract the nibble (4 bits)
+void MyIntToHexStr(long long value, char* buffer) {
+    int i;
+    // We need exactly 12 hex digits for "7FFD572D0000"
+    for (i = 11; i >= 0; i--) {
+        int nibble = value & 0xF;  // Get the last 4 bits (1 nibble)
         
-        // Convert nibble to corresponding hex character
+        // Convert the nibble to a hex character
         if (nibble < 10) {
-            temp[i++] = '0' + nibble;
+            buffer[i] = '0' + nibble;
         } else {
-            temp[i++] = 'A' + (nibble - 10);
+            buffer[i] = 'A' + (nibble - 10);
         }
+
+        value >>= 4;  // Shift right by 4 bits to process the next nibble
     }
 
-    temp[i] = '\0';  // Null-terminate the string
-
-    // Remove leading zeros by copying to buffer
-    char* temp_ptr = temp;
-    while (*temp_ptr == '0' && *(temp_ptr + 1) != '\0') {
-        temp_ptr++;
-    }
-
-    // Copy the final hex string to the output buffer
-    int j = 0;
-    while (temp_ptr[j] != '\0') {
-        buffer[j] = temp_ptr[j];
-        j++;
-    }
-    buffer[j] = '\0';  // Null-terminate the final string
+    buffer[12] = '\0';  // Null-terminate the string
 }
 
 
@@ -567,8 +553,11 @@ char* get_json(ModuleInformation* module_list, int module_counter){
         if(i != 0){
             json_output = concatenate_strings(json_output, ", ");    
         }
-        char*  base_buffer[12];
-        MyIntToHexStr(module_list[i].dll_base, base_buffer);
+        char* base_buffer[17];
+        MyIntToHexStr((long long) module_list[i].dll_base, base_buffer);
+        // BeaconPrintf(CALLBACK_OUTPUT, "%p\n", module_list[i].dll_base);
+        // BeaconPrintf(CALLBACK_OUTPUT, "%s\n", base_buffer);
+
         char* size_buffer[12];
         MyIntToStr(module_list[i].size, size_buffer);
         char* full_dll_path_corrected[MAX_PATH];
