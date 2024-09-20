@@ -121,7 +121,7 @@ void write_string_to_file(char* file_path, char* data) {
     if (!result) {
         BeaconPrintf(CALLBACK_ERROR, "Failed to write to file: %s\n", file_path);
     } else {
-        BeaconPrintf(CALLBACK_OUTPUT, "Successfully wrote %d bytes to file: %s\n", bytesWritten, file_path);
+        BeaconPrintf(CALLBACK_OUTPUT, "[+] File %s generated (%d bytes).\n", file_path, bytesWritten);
     }
 
     // Close handle

