@@ -244,9 +244,11 @@ int MyStrCmp(const char* s1, const char* s2) {
 
 void MyIntToHexStr(long long value, char* buffer) {
     int i;
-    for (i = 11; i >= 0; i--) {
+
+    // Start filling the buffer from index 15, leaving space for 16 hex characters
+    for (i = 15; i >= 0; i--) {
         int nibble = value & 0xF;  // Get the last 4 bits (1 nibble)
-        
+
         // Convert the nibble to a hex character
         if (nibble < 10) {
             buffer[i] = '0' + nibble;
@@ -257,7 +259,7 @@ void MyIntToHexStr(long long value, char* buffer) {
         value >>= 4;  // Shift right by 4 bits to process the next nibble
     }
 
-    buffer[12] = '\0';  // Null-terminate the string
+    buffer[16] = '\0';  // Null-terminate the string
 }
 
 
@@ -468,13 +470,21 @@ char* get_json(MemFile* memfile_list, int memfile_count){
         if(i != 0){
             json_output = concatenate_strings(json_output, ", ");    
         }
-        char* base_buffer[12];
+        char* base_buffer[17];
         MyIntToHexStr((long long) memfile_list[i].address, base_buffer);
+        // BeaconPrintf(CALLBACK_OUTPUT, "%s\n", base_buffer);
         char* size_buffer[12];
         MyIntToStr(memfile_list[i].size, size_buffer);
-        char* json_part_1 = create_string_with_var("{\"field0\":\"", memfile_list[i].filename, "\",");
+
+        char* buffer_name[17];
+        MyIntToHexStr((long long) memfile_list[i].address, buffer_name);
+        //MyStrcpy(memFile.filename, buffer_name, 17);
+
+        // char* json_part_1 = create_string_with_var("{\"field0\":\"", memfile_list[i].filename, "\",");
+        char* json_part_1 = create_string_with_var("{\"field0\":\"", buffer_name, "\",");
         // BeaconPrintf(CALLBACK_OUTPUT, "%s\n", json_part_1);
         // char* json_part_2 = create_string_with_var("\"field1\": \"", memfile_list[i].full_dll_path, "\", ");
+        // char* json_part_2 = create_string_with_var("\"field1\":\"0x", base_buffer, "\",");
         char* json_part_2 = create_string_with_var("\"field1\":\"0x", base_buffer, "\",");
         char* json_part_3 = create_string_with_var("\"field2\":\"", size_buffer, "\"}");
         char* json_entry = concatenate_strings(concatenate_strings(json_part_1, json_part_2), json_part_3);
@@ -558,7 +568,11 @@ void Barrel(){
 
             // Add to MemFile array
             MemFile memFile;
-            MyStrcpy(memFile.filename, random_name, 15);
+            char* buffer_name[17];
+            MyIntToHexStr((long long) mem_address, buffer_name);
+            MyStrcpy(memFile.filename, buffer_name, 17);
+            // MyStrcpy(memFile.filename, random_name, 15);
+            
             memFile.content = (unsigned char*) buffer;
             // BeaconPrintf(CALLBACK_OUTPUT, "regionSize: \t%d\n", regionSize);
             // memFile.content = (unsigned char*)KERNEL32$HeapAlloc(hHeap, HEAP_ZERO_MEMORY, regionSize);
