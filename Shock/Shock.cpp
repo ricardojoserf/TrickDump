@@ -140,7 +140,7 @@ ModuleInformation* add_module(ModuleInformation* list, int counter, ModuleInform
 }
 
 
-ModuleInformation* CustomGetModuleHandle(HANDLE hProcess) {
+ModuleInformation* CustomGetModuleHandle(HANDLE hProcess, int* module_counte_ext) {
     ModuleInformation* module_list = (ModuleInformation*)malloc(1024 * sizeof(ModuleInformation));
     int module_counter = 0;
 
@@ -214,7 +214,7 @@ ModuleInformation* CustomGetModuleHandle(HANDLE hProcess) {
 
         next_flink = ReadRemoteIntPtr(hProcess, (void*)((uintptr_t)next_flink + 0x10));
     }
-
+    *module_counte_ext = module_counter;
     return module_list;
 }
 
@@ -356,15 +356,8 @@ int Shock(const char* filename) {
     printf("[+] Process handle:\t%d\n", hProcess);
 
     // List to get modules information
-    ModuleInformation* moduleInformationList = CustomGetModuleHandle(hProcess);
     int module_counter = 0;
-
-    for (int i = 0; i < MAX_MODULES; i++) {
-        if (strcmp(moduleInformationList[i].base_dll_name, "")) {
-            module_counter++;
-            //printf("%d %s (%s)\n", module_counter, moduleInformationList[i].base_dll_name, moduleInformationList[i].full_dll_path);
-        }
-    }
+    ModuleInformation* moduleInformationList = CustomGetModuleHandle(hProcess, &module_counter);
     printf("[+] Processed %d modules\n", module_counter);
 
     // Initialize variables
@@ -439,8 +432,8 @@ int Shock(const char* filename) {
         return 1;
     }
     fprintf(file, "%s", json_output);
-    fclose(file);
     printf("[+] File %s generated.\n", filename);
+    fclose(file);
 }
 
 
