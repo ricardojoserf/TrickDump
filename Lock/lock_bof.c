@@ -1,7 +1,10 @@
 #include <windows.h>
 #include "beacon.h"
 
+
+// Functions
 DECLSPEC_IMPORT NTSTATUS NTAPI NTDLL$RtlGetVersion(POSVERSIONINFOW);
+
 DECLSPEC_IMPORT HANDLE WINAPI KERNEL32$GetProcessHeap();
 DECLSPEC_IMPORT LPVOID WINAPI KERNEL32$HeapAlloc(HANDLE, DWORD, SIZE_T);
 DECLSPEC_IMPORT HANDLE WINAPI KERNEL32$CreateFileA(LPCSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
@@ -19,33 +22,24 @@ int MyStrLen(char *str) {
 
 
 void MyIntToStr(int value, char* buffer) {
-    char temp[12];  // Temporary buffer to store the digits
+    char temp[12];
     int i = 0;
     int is_negative = 0;
-
-    // Handle negative numbers
     if (value < 0) {
         is_negative = 1;
         value = -value;
     }
-
-    // Extract digits and store in temp in reverse order
     do {
         temp[i++] = (value % 10) + '0';
         value /= 10;
     } while (value > 0);
-
-    // Add minus sign for negative numbers
     if (is_negative) {
         temp[i++] = '-';
     }
-
-    // Reverse the characters from temp into the final buffer
     int j = 0;
     while (i > 0) {
         buffer[j++] = temp[--i];
-    }
-    
+    }    
     buffer[j] = '\0';
 }
 
@@ -54,17 +48,12 @@ char* create_string_with_var(char* f1, char* var1, char* f2) {
     size_t f1_len = MyStrLen(f1);
     size_t v1_len = MyStrLen(var1);
     size_t f2_len = MyStrLen(f2);
-    
     HANDLE hHeap = KERNEL32$GetProcessHeap();
-    if (hHeap == NULL) {
-        return NULL;
-    }
     size_t total_len = f1_len + v1_len + f2_len + 1;  // +1 for null terminator
     char* result = (char*)KERNEL32$HeapAlloc(hHeap, HEAP_ZERO_MEMORY, 5096);    
     if (result == NULL) {
-        return NULL;  // Handle allocation failure
+        return NULL;
     }
-
     size_t offset = 0;
     for (size_t i = 0; i < f1_len; i++) {
         result[offset++] = f1[i];
@@ -82,18 +71,12 @@ char* create_string_with_var(char* f1, char* var1, char* f2) {
 
 char* concatenate_strings(char* str1, char* str2) {
     HANDLE hHeap = KERNEL32$GetProcessHeap();
-    if (hHeap == NULL) {
-        return NULL;
-    }
-
     size_t len1 = MyStrLen(str1);
     size_t len2 = MyStrLen(str2);
-
     char* result = (char*)KERNEL32$HeapAlloc(hHeap, HEAP_ZERO_MEMORY, len1 + len2 + 1);
     if (result == NULL) {
         return NULL;
     }
-
     for (size_t i = 0; i < len1; i++) {
         result[i] = str1[i];
     }
@@ -101,7 +84,6 @@ char* concatenate_strings(char* str1, char* str2) {
         result[len1 + i] = str2[i];
     }
     result[len1 + len2] = '\0';
-
     return result;
 }
 
@@ -129,8 +111,7 @@ void write_string_to_file(char* file_path, char* data) {
 }
 
 
-void Lock(){
-    char* filename = "lock.json";
+void Lock(char* filename){
     OSVERSIONINFOW osvi;
     NTSTATUS status = NTDLL$RtlGetVersion(&osvi);
     if (status == 0) {
@@ -145,12 +126,12 @@ void Lock(){
         char* json_part_3 = create_string_with_var("\"field2\": \"", buildnumber_buffer, "\"}");
         char* json_entry = concatenate_strings(concatenate_strings(json_part_1, json_part_2), json_part_3);
         char* json_output = concatenate_strings(concatenate_strings("[", json_entry), "]");
-        //BeaconPrintf(CALLBACK_OUTPUT, "%s\n", json_output);
         write_string_to_file(filename, json_output);
     }
 }
 
 
 void go() {
-    Lock();
+    char* filename = "lock.json";
+    Lock(filename);
 }
