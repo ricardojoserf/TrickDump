@@ -50,3 +50,10 @@ It creates all the files at the same time:
 Then you can create the Minidump file using *create_dump.py*:
 
 ![img6](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF6.png)
+
+
+-----------------------------
+
+### TO-DO
+
+[ ] Ntdll overwrite
