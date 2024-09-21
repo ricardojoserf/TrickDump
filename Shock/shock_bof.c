@@ -321,16 +321,18 @@ ModuleInformation* CustomGetModuleHandle(HANDLE process_handle, int* out_module_
         next_flink = ReadRemoteIntPtr(process_handle, (void*)((uintptr_t)next_flink + 0x10));
     }
 
+    /*
     ModuleInformation* new_module_list = (ModuleInformation*)KERNEL32$HeapAlloc(hHeap, HEAP_ZERO_MEMORY, sizeof(ModuleInformation) * module_counter);
     for (int i = 0; i < module_counter; i++) {
         new_module_list[i] = module_list[i];
     }
 
     KERNEL32$HeapFree(hHeap, 0, module_list);
+    */
 
     // Return the module list
     *out_module_counter = module_counter;
-    return new_module_list;
+    return module_list;
 }
 
 
