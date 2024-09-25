@@ -97,6 +97,10 @@ And create the Minidump file:
 
 Or create all at the same time with Trick:
 
+```
+COFFLoader64.exe go trick_bof.o <OVERWRITE_TECHNIQUE>
+```
+
 ![img12](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF12.png)
 
 ![img13](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF13.png)
