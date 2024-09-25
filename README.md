@@ -91,9 +91,15 @@ COFFLoader64.exe go barrel_bof.o 0e0000000a000000646562756770726f6300
 
 ![img10](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF10.png)
 
+And create the Minidump file:
 
 ![img11](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF11.png)
 
+Or create all at the same time with Trick:
+
+![img12](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF12.png)
+
+![img13](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF13.png)
 
 --------------------------------------
 
@@ -108,9 +114,11 @@ execute_bof shock_bof.o <OVERWRITE_TECHNIQUE>
 execute_bof barrel_bof.o <OVERWRITE_TECHNIQUE>
 ```
 
+![img14](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF14.png)
+
 Then create the Minidump file:
 
-![img12](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF12.png)
+![img15](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF15.png)
 
 The same happens with the Trick BOF:
 
@@ -118,6 +126,6 @@ The same happens with the Trick BOF:
 execute_bof trick_bof.o <OVERWRITE_TECHNIQUE>
 ```
 
-![img13](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF13.png)
+![img16](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF16.png)
 
-![img14](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF14.png)
+![img17](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF17.png)
