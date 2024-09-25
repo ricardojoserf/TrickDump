@@ -1,0 +1,9 @@
+alias trick {
+        local('$handle $data $args $filename');
+        $handle = openf(script_resource("trick_bof.o"));
+        $data = readb($handle, -1);
+        $option = $2;
+        $args = bof_pack($1, "z", $option);
+        btask($1, "Running Trick. Option $2 selected");
+        beacon_inline_execute($1, $data, "go", $args);
+}
