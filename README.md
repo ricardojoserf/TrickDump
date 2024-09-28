@@ -36,18 +36,15 @@ barrel <OVERWRITE_TECHNIQUE>
 
 ![bof4](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF4.png)
 
-
-I could not create a ZIP file using BOF files so the memory region dumps are created in a directory with a random name.
-
-Use the updated *create_dump.py* script to generate the Minidump file in your attack system using the *-d* parameter for the directory path:
+Then generate the Minidump file:
 
 ```
-python3 create_dump.py [-l LOCK_JSON] [-s SHOCK_JSON] [-b BARREL_JSON] [-d BARREL_DIRECTORY] [-o OUTPUT_FILE]
+python3 create_dump.py [-l LOCK_JSON] [-s SHOCK_JSON] [-b BARREL_JSON] [-z BARREL_ZIP] [-o OUTPUT_FILE]
 ```
 
 ![bof5](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF5.png)
 
-If you prefer to generate all the files at the same time you can run "trick" instead:
+If you prefer to generate all the files at the same time you can run the Trick BOF:
 
 ```
 trick <OVERWRITE_TECHNIQUE>
