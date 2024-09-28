@@ -36,21 +36,19 @@ barrel <OVERWRITE_TECHNIQUE>
 
 ![bof4](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF4.png)
 
-Then generate the Minidump file:
+If you prefer to generate all the files at the same time, run the Trick BOF:
+
+```
+trick <OVERWRITE_TECHNIQUE>
+```
+
+![bof6](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF6.png)
+
+Finally generate the Minidump file:
 
 ```
 python3 create_dump.py [-l LOCK_JSON] [-s SHOCK_JSON] [-b BARREL_JSON] [-z BARREL_ZIP] [-o OUTPUT_FILE]
 ```
-
-![bof5](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF5.png)
-
-If you prefer to generate all the files at the same time you can run the Trick BOF:
-
-```
-trick <OVERWRITE_TECHNIQUE>
-``` 
-
-![bof6](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF6.png)
 
 ![bof7](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF7.png)
 
@@ -88,11 +86,7 @@ COFFLoader64.exe go barrel_bof.o 0e0000000a000000646562756770726f6300
 
 ![img10](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF10.png)
 
-And create the Minidump file:
-
-![img11](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF11.png)
-
-Or create all the files at the same time with the Trick BOF and generate the Minidump later:
+If you prefer to generate all the files at the same time, run the Trick BOF:
 
 ```
 COFFLoader64.exe go trick_bof.o <OVERWRITE_TECHNIQUE>
@@ -100,7 +94,6 @@ COFFLoader64.exe go trick_bof.o <OVERWRITE_TECHNIQUE>
 
 ![img12](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF12.png)
 
-![img13](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF13.png)
 
 --------------------------------------
 
@@ -117,16 +110,10 @@ execute_bof barrel_bof.o --format-string z <OVERWRITE_TECHNIQUE>
 
 ![img14](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF14.png)
 
-Then create the Minidump file:
-
-![img15](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF15.png)
-
-Or create all the files at the same time with the Trick BOF and generate the Minidump later:
+If you prefer to generate all the files at the same time, run the Trick BOF:
 
 ```
 execute_bof trick_bof.o --format-string z <OVERWRITE_TECHNIQUE>
 ```
 
 ![img16](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF16.png)
-
-![img17](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF17.png)
