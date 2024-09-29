@@ -9,7 +9,7 @@ You can execute the files using Cobalt Strike, TrustedSec's [COFFLoader](https:/
 
 ## Cobalt Strike
 
-First import each aggressor script:
+First import the aggressor scripts:
 
 ![bof1](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF1.png)
 
@@ -99,7 +99,7 @@ COFFLoader64.exe go trick_bof.o <OVERWRITE_TECHNIQUE>
 
 ## Meterpreter's bofloader module
 
-You can run the BOF files in your Meterpreter session after loading the execute_bof module and using "--format-string z <technique>" to use a ntdll overwrite technique:
+You can run the BOF files in your Meterpreter session after loading the "bofloader" module and using "--format-string z <technique>" to use a ntdll overwrite technique:
 
 ```
 load bofloader
