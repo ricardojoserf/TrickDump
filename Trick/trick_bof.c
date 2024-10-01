@@ -308,7 +308,7 @@ void create_zip(const char* zip_fname, ZipFile* zip_files, int file_count) {
     // Clean up
     KERNEL32$HeapFree(hHeap, 0, centralHeaders);
     KERNEL32$CloseHandle(hZipFile);
-    BeaconPrintf(CALLBACK_OUTPUT, "[+] ZIP file %s generated.\n", zip_fname);
+    BeaconPrintf(CALLBACK_OUTPUT, "[+] File %s generated.\n", zip_fname);
 }
 
 ZipFile createZipFile(const char* fname, unsigned char* fcontent, int size) {
