@@ -44,7 +44,7 @@ trick <OVERWRITE_TECHNIQUE>
 
 ![bof6](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF6.png)
 
-Finally generate the Minidump file. If you used the Trick BOF unzip the *trick.zip* file, even if there are problems with files headers it should work:
+Finally generate the Minidump file with *create_dump.py*. If you used the Trick BOF unzip the *trick.zip* file, even if there are problems with files headers it should work fine:
 
 ```
 python3 create_dump.py [-l LOCK_JSON] [-s SHOCK_JSON] [-b BARREL_JSON] [-z BARREL_ZIP] [-o OUTPUT_FILE]
@@ -62,9 +62,9 @@ COFFLoader64.exe go <BOF_FILE> <OVERWRITE_TECHNIQUE>
 ```
 
 The argument to overwrite the ntdll library must be generated using COFFLoader's [beacon_generate.py script](https://github.com/trustedsec/COFFLoader/blob/main/beacon_generate.py):
-- "disk": Use the value 09000000050000006469736b00
-- "knowndlls": Use the value 0e0000000a0000006b6e6f776e646c6c7300
-- "debugproc": Use the value 0e0000000a000000646562756770726f6300
+- "disk": Use the value *09000000050000006469736b00*
+- "knowndlls": Use the value *0e0000000a0000006b6e6f776e646c6c7300*
+- "debugproc": Use the value *0e0000000a000000646562756770726f6300*
   
 Examples running each BOF file with a differente overwrite technique:
 
