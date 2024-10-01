@@ -44,7 +44,7 @@ trick <OVERWRITE_TECHNIQUE>
 
 ![bof6](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF6.png)
 
-Finally generate the Minidump file:
+Finally generate the Minidump file. If you used the Trick BOF unzip the *trick.zip* file, even if there are problems with files headers it should work:
 
 ```
 python3 create_dump.py [-l LOCK_JSON] [-s SHOCK_JSON] [-b BARREL_JSON] [-z BARREL_ZIP] [-o OUTPUT_FILE]
