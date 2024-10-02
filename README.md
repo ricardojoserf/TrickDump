@@ -4,6 +4,8 @@ This branch implements the same functionality as the main branch but using BOFs 
 
 You can execute the files using Cobalt Strike, TrustedSec's [COFFLoader](https://github.com/trustedsec/COFFLoader) or Meterpreter's [bofloader module](https://docs.metasploit.com/docs/using-metasploit/advanced/meterpreter/meterpreter-executebof-command.html).
 
+Note: I have tested the BOF file in Windows 10 and 11 systems, 64 bits and no PPL. Please consider testing the BOF file in a lab environment if you face different conditions.
+
 
 -----------------------------------------
 
