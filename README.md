@@ -4,7 +4,7 @@ This branch implements the same functionality as the main branch but using BOFs 
 
 You can execute the files using Cobalt Strike, TrustedSec's [COFFLoader](https://github.com/trustedsec/COFFLoader) or Meterpreter's [bofloader module](https://docs.metasploit.com/docs/using-metasploit/advanced/meterpreter/meterpreter-executebof-command.html).
 
-Note: I have tested the BOF file in Windows 10 and 11 systems, 64 bits and no PPL, please consider testing the BOF file in a lab environment if you face different conditions.
+I have tested the BOF files in Windows 10 and 11 systems, both 64 bits and no PPL, please consider testing the BOF file in a lab environment if you face different conditions.
 
 
 -----------------------------------------
@@ -124,4 +124,4 @@ execute_bof trick_bof.o --format-string z <OVERWRITE_TECHNIQUE>
 
 # ⭐ Support This Project by Starring the Repository!
 
-If you find this project helpful or interesting, please consider giving it a star 🌟 on GitHub! Your support helps us grow, improve, and continue delivering more awesome features.
+If you find this project helpful or interesting, please consider giving it a star 🌟 on GitHub!
