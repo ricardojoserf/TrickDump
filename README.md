@@ -122,6 +122,6 @@ execute_bof trick_bof.o --format-string z <OVERWRITE_TECHNIQUE>
 
 ----------------------------------
 
-# ⭐ Support This Project by Starring the Repository!
+## ⭐ Support This Project by Starring the Repository!
 
 If you find this project helpful or interesting, please consider giving it a star 🌟 on GitHub!
