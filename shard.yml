@@ -1,5 +1,5 @@
-name: my_project  # Replace with your project name
-version: 0.1.0    # Optional: Specify the version of your project
+name: TrickDump
+version: 0.1.0
 dependencies:
   zip64:
     github: crystal-garage/crystal-zip64
