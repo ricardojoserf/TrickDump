@@ -68,7 +68,13 @@ With a ZIP file like this, you can unzip it and create the Minidump file using *
 
 ## Build
 
-To build the binaries, use commands like these:
+First resolve and install dependencies ([crystal-garage/crystal-zip64](https://github.com/crystal-garage/crystal-zip64) is the only one):
+
+```
+shards install
+```
+
+Then build the binaries you need:
 
 ```
 crystal build lock.cr --release
