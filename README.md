@@ -100,10 +100,3 @@ Or send it to a remote port using the second and third parameter as the IP addre
 In both cases you get a ZIP file like this, unzip it and create the Minidump file:
 
 ![img7](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_7.png)
-
-
-----------------------------------
-
-## ⭐ Support This Project by Starring the Repository!
-
-If you find this project helpful or interesting, please consider giving it a star 🌟 on GitHub! :)
