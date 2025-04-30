@@ -43,28 +43,9 @@ proc NtOpenProcessToken(ProcessHandle: HANDLE, DesiredAccess: DWORD, TokenHandle
 proc NtAdjustPrivilegesToken(TokenHandle: HANDLE, DisableAllPrivileges: BOOLEAN, NewState: ptr TokenPrivileges, BufferLength: DWORD, PreviousState: PVOID, ReturnLength: PDWORD): NTSTATUS {.discardable, dynlib: "ntdll", importc: "NtAdjustPrivilegesToken".}
 proc NtClose(Handle: HANDLE): NTSTATUS {.discardable, dynlib: "ntdll", importc: "NtClose".}
 proc NtGetNextProcess(ProcessHandle: HANDLE, DesiredAccess: ACCESS_MASK, HandleAttributes: ULONG, Flags: ULONG, NewProcessHandle: PHANDLE): NTSTATUS {.discardable, dynlib: "ntdll", importc: "NtGetNextProcess".}
-proc NtQueryInformationProcess(
-    ProcessHandle: HANDLE,
-    ProcessInformationClass: PROCESSINFOCLASS,
-    ProcessInformation: PVOID,
-    ProcessInformationLength: ULONG,
-    ReturnLength: PULONG
-): NTSTATUS {.discardable, dynlib: "ntdll", importc: "NtQueryInformationProcess".}
-proc NtReadVirtualMemory(
-    ProcessHandle: HANDLE,
-    BaseAddress: PVOID,
-    Buffer: PVOID,
-    BufferSize: SIZE_T,
-    NumberOfBytesRead: PSIZE_T
-): NTSTATUS {.discardable, dynlib: "ntdll", importc: "NtReadVirtualMemory".}
-proc NtQueryVirtualMemory(
-    ProcessHandle: HANDLE,
-    BaseAddress: PVOID,
-    MemoryInformationClass: MEMORY_INFORMATION_CLASS,
-    MemoryInformation: PVOID,
-    MemoryInformationLength: SIZE_T,
-    ReturnLength: PSIZE_T
-): NTSTATUS {.discardable, dynlib: "ntdll", importc: "NtQueryVirtualMemory".}
+proc NtQueryInformationProcess(ProcessHandle: HANDLE, ProcessInformationClass: PROCESSINFOCLASS, ProcessInformation: PVOID, ProcessInformationLength: ULONG, ReturnLength: PULONG): NTSTATUS {.discardable, dynlib: "ntdll", importc: "NtQueryInformationProcess".}
+proc NtReadVirtualMemory(ProcessHandle: HANDLE, BaseAddress: PVOID, Buffer: PVOID, BufferSize: SIZE_T, NumberOfBytesRead: PSIZE_T): NTSTATUS {.discardable, dynlib: "ntdll", importc: "NtReadVirtualMemory".}
+proc NtQueryVirtualMemory(ProcessHandle: HANDLE, BaseAddress: PVOID, MemoryInformationClass: MEMORY_INFORMATION_CLASS, MemoryInformation: PVOID, MemoryInformationLength: SIZE_T, ReturnLength: PSIZE_T): NTSTATUS {.discardable, dynlib: "ntdll", importc: "NtQueryVirtualMemory".}
 
 
 proc enableDebugPrivileges*() =
@@ -412,15 +393,6 @@ when isMainModule:
     var lastMod = moduleArray[lastIndex]
     lastMod.size = auxSize
     copyMem(addr moduleArray[lastIndex], addr lastMod, sizeof(ModuleInformation))
-
-  # Output modules
-  #for i in 0..<moduleCounter:
-    #let m = moduleArray[i]
-    #echo "Module ", i+1, ":"
-    #echo "  Name: ", $cast[cstring](addr m.base_dll_name[0])
-    #echo "  Path: ", $cast[cstring](addr m.full_dll_path[0])
-    #echo "  Base: 0x", toHex(cast[int](m.dll_base))
-    #echo "  Size: 0x", toHex(cast[int](m.size))
 
   var jsonItems: seq[JsonNode] = @[]
   for i in 0..<moduleCounter:

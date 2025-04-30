@@ -12,6 +12,7 @@ def get_args():
 	parser.add_argument('-b', '--barrel_json', required=False, default='barrel.json', action='store', help='File path for barrel.json')
 	parser.add_argument('-z', '--barrel_zip',  required=False, default='barrel.zip', action='store', help='Zip file containing the regions memory dumps')
 	parser.add_argument('-o', '--output_file', required=False, default='oogie.dmp', action='store', help='Dump file name')
+	parser.add_argument('-d', '--dir', required=False, action='store', help='Dir')
 	my_args = parser.parse_args()
 	return my_args
 
@@ -22,7 +23,7 @@ def read_binary_file(file_path):
     return byte_array
 
 
-def get_dump_bytearr(lock_json, shock_json, barrel_json, zip_file):
+def get_dump_bytearr(lock_json, shock_json, barrel_json, zip_file, dir_):
 	# Calculations
 	number_modules = str(len(shock_json))
 	modulelist_size = 4
@@ -102,14 +103,17 @@ def get_dump_bytearr(lock_json, shock_json, barrel_json, zip_file):
 		memory64list_stream += int(mem64.get("field1"),16).to_bytes(8, 'little') # Mem64 Address
 		memory64list_stream += int(mem64.get("field2")).to_bytes(8, 'little')    # Mem64 Size
 
+	# Extract all contents
+	temp_dir = "temp_dir\\"
+	with zipfile.ZipFile(zip_file, 'r') as zip_ref:
+		zip_ref.extractall(temp_dir)
+
 	# Add memory regions from zip file
 	memory_bytearr = b''
-
-	with zipfile.ZipFile(zip_file, 'r') as zip_file_handle:
-		for file_info in zip_file_handle.infolist():
-			with zip_file_handle.open(file_info.filename) as file:
-				file_bytes = file.read()
-				memory_bytearr += file_bytes
+	for mem64 in barrel_json:
+		file_path = temp_dir + mem64.get("field0")
+		region_bytearr = read_binary_file(file_path)
+		memory_bytearr += region_bytearr
 
 	dump_file = header + stream_directory + systeminfo_stream + modulelist_stream + memory64list_stream + memory_bytearr
 	return dump_file
@@ -139,6 +143,7 @@ def main():
 	barrel_file = args.barrel_json
 	memory_files = args.barrel_zip
 	output_file = args.output_file
+	dir_ = args.dir
 
 	show_banner()
 
@@ -163,7 +168,7 @@ def main():
 		print("[-] File or Directory " + memory_files + " not found")
 		sys.exit(0)
 
-	dump_file = get_dump_bytearr(lock_json, shock_json, barrel_json, memory_files)
+	dump_file = get_dump_bytearr(lock_json, shock_json, barrel_json, memory_files, dir_)
 	create_file(output_file, dump_file)
 	print("[+] Dump file " + output_file + " created ")
 
