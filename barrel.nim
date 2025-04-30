@@ -203,7 +203,7 @@ proc GenerateZip*(zipFilename: string, memfiles: openArray[MemFile]): bool =
     let zipData = createZipArchive(files)
     writeFile(zipFilename, zipData)
 
-    echo "[+] ZIP generado correctamente: ", zipFilename
+    echo "[+] File ", zipFilename, "  generated correctly"
     return true
   except:
     echo "[-] Error al generar el ZIP"

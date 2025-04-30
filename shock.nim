@@ -209,13 +209,13 @@ proc customGetModuleHandle*(hProcess: HANDLE, moduleCount: ptr int): ptr ModuleI
     # Get PEB address
   let pebPointer = cast[uint](addr pbiByteArray[0]) + PebOffset
   let pebAddress = cast[ptr PVOID](pebPointer)[]
-  echo "[+] PEB Address: \t0x", toHex(cast[int](pebAddress), 8), "p"
+  echo "[+] PEB Address: \t0x", toHex(cast[int](pebAddress), 8)
 
   # Get LDR address
   let ldrPointer = cast[uint](pebAddress) + LdrOffset
   let ldrAddress = readRemoteIntPtr(hProcess, cast[PVOID](ldrPointer))
-  echo "[+] Ldr Pointer: \t0x", toHex(cast[int](ldrPointer)), "p"
-  echo "[+] Ldr Address: \t0x", toHex(cast[int](ldrAddress)), "p"
+  echo "[+] Ldr Pointer: \t0x", toHex(cast[int](ldrPointer))
+  echo "[+] Ldr Address: \t0x", toHex(cast[int](ldrAddress))
 
   # Get module list
   let initOrderModuleList = cast[uint](ldrAddress) + InInitializationOrderModuleListOffset

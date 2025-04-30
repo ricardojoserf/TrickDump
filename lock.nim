@@ -1,6 +1,6 @@
 import winim/lean
 import json
-import os
+
 
 type
   OSVERSIONINFOEX* = object
