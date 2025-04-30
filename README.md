@@ -37,3 +37,5 @@ python3 create_dump.py [-l LOCK_JSON] [-s SHOCK_JSON] [-b BARREL_JSON] [-z BARRE
 ```
 
 ![img2](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/refs/heads/master/images/trickdump/Screenshot_nim2.png)
+
+Once you have the Minidump file, get the credentials using Mimikatz. Good luck! :)
