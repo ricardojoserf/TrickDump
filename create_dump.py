@@ -3,6 +3,7 @@ import sys
 import json
 import zipfile
 import argparse
+import shutil
 
 
 def get_args():
@@ -12,7 +13,6 @@ def get_args():
 	parser.add_argument('-b', '--barrel_json', required=False, default='barrel.json', action='store', help='File path for barrel.json')
 	parser.add_argument('-z', '--barrel_zip',  required=False, default='barrel.zip', action='store', help='Zip file containing the regions memory dumps')
 	parser.add_argument('-o', '--output_file', required=False, default='oogie.dmp', action='store', help='Dump file name')
-	parser.add_argument('-d', '--dir', required=False, action='store', help='Dir')
 	my_args = parser.parse_args()
 	return my_args
 
@@ -23,7 +23,7 @@ def read_binary_file(file_path):
     return byte_array
 
 
-def get_dump_bytearr(lock_json, shock_json, barrel_json, zip_file, dir_):
+def get_dump_bytearr(lock_json, shock_json, barrel_json, zip_file):
 	# Calculations
 	number_modules = str(len(shock_json))
 	modulelist_size = 4
@@ -115,6 +115,9 @@ def get_dump_bytearr(lock_json, shock_json, barrel_json, zip_file, dir_):
 		region_bytearr = read_binary_file(file_path)
 		memory_bytearr += region_bytearr
 
+	# Remove temp directory
+	shutil.rmtree(temp_dir)
+
 	dump_file = header + stream_directory + systeminfo_stream + modulelist_stream + memory64list_stream + memory_bytearr
 	return dump_file
 
@@ -143,7 +146,6 @@ def main():
 	barrel_file = args.barrel_json
 	memory_files = args.barrel_zip
 	output_file = args.output_file
-	dir_ = args.dir
 
 	show_banner()
 
@@ -168,7 +170,7 @@ def main():
 		print("[-] File or Directory " + memory_files + " not found")
 		sys.exit(0)
 
-	dump_file = get_dump_bytearr(lock_json, shock_json, barrel_json, memory_files, dir_)
+	dump_file = get_dump_bytearr(lock_json, shock_json, barrel_json, memory_files)
 	create_file(output_file, dump_file)
 	print("[+] Dump file " + output_file + " created ")
 
