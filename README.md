@@ -1,13 +1,15 @@
 # TrickDump - Nim flavour
 
-Compile binaries with:
+Compile all the binaries with:
 
 ```
 nim c --cpu:amd64 --opt:size --d:release lock.nim
 nim c --cpu:amd64 --opt:size --d:release shock.nim
 nim c --cpu:amd64 --opt:size --d:release barrel.nim
+nim c --cpu:amd64 --opt:size --d:release trick.nim
 ```
 
+You can run the programs separately and get 3 JSON files and 1 ZIP file:
 
 ```
 lock.exe  [-j JSON_NAME ] [-r]
@@ -39,12 +41,34 @@ It is possible to remap the ntdll.dll library using the parameter *-r* and chang
 
 ![img2](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/refs/heads/master/images/trickdump/Screenshot_nim2.png)
 
-Finally, create the Minidump file using the *create_dump.py* in this branch. It extracts the ZIP file content to a temporary folder, necessary only for the Nim flavour:
+Finally, create the Minidump file using the *create_dump.py* file in this branch. It extracts the ZIP file content to a temporary folder, necessary only for the Nim flavour:
 
 ```
 python3 create_dump.py [-l LOCK_JSON] [-s SHOCK_JSON] [-b BARREL_JSON] [-z BARREL_ZIP] [-o OUTPUT_FILE] 
 ```
 
 ![img3](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/refs/heads/master/images/trickdump/Screenshot_nim3.png)
+
+-------------------------
+
+## Trick: All in one
+
+If you prefer to execute only one binary, Trick generates a ZIP file containing the 3 JSON files and the ZIP file with the memory regions:
+
+```
+trick.exe [-z ZIPNAME] [-r]
+```
+
+
+It creates the ZIP file locally, optionally using a ntdll.dll overwrite method:
+
+![img4](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_nim4.png)
+
+
+With a ZIP file like this, you can unzip it and create the Minidump file using *create_dump.py* later:
+
+![img5](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_nim5.png)
+
+<br>
 
 Once you have the Minidump file, get the credentials using Mimikatz. Good luck! :)
