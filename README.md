@@ -62,27 +62,27 @@ With a ZIP file like this, unzip it and create the Minidump file using *create_d
 
 ## Compilation
 
-In Windows, compile all the binaries with:
+In Windows, install the necessary libraries and compile the binaries with:
 
 ```
+nimble install winim zippy
 nim c --cpu:amd64 --opt:size --d:release lock.nim
 nim c --cpu:amd64 --opt:size --d:release shock.nim
 nim c --cpu:amd64 --opt:size --d:release barrel.nim
 nim c --cpu:amd64 --opt:size --d:release trick.nim
 ```
 
-
-In Linux, install the compiler, nim and the winim library:
+In Linux, install the compiler, nim and the necessary libraries:
 
 ```
 sudo apt install mingw-w64
 curl https://nim-lang.org/choosenim/init.sh -sSf | sh
 source ~/.profile
 export PATH=$HOME/.nimble/bin:$PATH
-nimble install winim
+nimble install winim zippy
 ```
 
-Then cross-compile the binaries:
+Finally, cross-compile the binaries:
 
 ```
 nim c --cpu:amd64 --opt:size --d:release --os:windows --gcc.exe:x86_64-w64-mingw32-gcc --gcc.linkerexe:x86_64-w64-mingw32-gcc lock.nim
