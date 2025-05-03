@@ -1,6 +1,6 @@
 # TrickDump - Crystal port
 
-This branch implements the same functionality as the main branch using Crystal lang.
+This branch implements the same functionality as the main branch using the Crystal programming language. You can run the programs separately and get 3 JSON files and 1 ZIP file:
 
 ```
 lock.exe  [-j JSON_NAME ] [-r]
@@ -12,17 +12,17 @@ shock.exe [-j JSON_NAME ] [-r]
 barrel.exe [-j JSON_NAME ] [-z ZIP_NAME] [-r]
 ```
 
-Options:
+The optional parameters are:
 
-- **JSON file name** (-j, optional): JSON file name
+- **-j**: JSON file name
 
-- **ZIP file name** (-z, optional): ZIP file name
+- **-z**: ZIP file name
 
-- **Remap ntdll** (-r, optional): Remap the ntdll.dll library
+- **-r**: Remap the ntdll.dll library
 
 <br>
 
-By default the programs do not remap the ntdll.dll and create the files "lock.json", "shock.json",  "barrel.json" and "barrel.zip":
+By default the programs do not remap the ntdll.dll library and create the files with the default names:
 
 ![img1](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/crystal_trick1.png)
 
@@ -44,14 +44,13 @@ python3 create_dump.py [-l LOCK_JSON] [-s SHOCK_JSON] [-b BARREL_JSON] [-z BARRE
 
 -------------------------
 
-## Trick: All in one
+## Trick (All in one)
 
 If you prefer to execute only one binary, Trick.exe generates a ZIP file containing the 3 JSON files and the ZIP file with the memory regions:
 
 ```
 trick.exe [-z ZIPNAME] [-r]
 ```
-
 
 It creates the ZIP file locally, optionally using a ntdll.dll overwrite method:
 
