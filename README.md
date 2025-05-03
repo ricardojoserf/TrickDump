@@ -1,14 +1,5 @@
 # TrickDump - Nim flavour
 
-Compile all the binaries with:
-
-```
-nim c --cpu:amd64 --opt:size --d:release lock.nim
-nim c --cpu:amd64 --opt:size --d:release shock.nim
-nim c --cpu:amd64 --opt:size --d:release barrel.nim
-nim c --cpu:amd64 --opt:size --d:release trick.nim
-```
-
 You can run the programs separately and get 3 JSON files and 1 ZIP file:
 
 ```
@@ -66,3 +57,36 @@ The optional parameters are the same:
 With a ZIP file like this, unzip it and create the Minidump file using *create_dump.py* later:
 
 ![img5](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_nim5.png)
+
+-------------------------
+
+## Compilation
+
+In Windows, compile all the binaries with:
+
+```
+nim c --cpu:amd64 --opt:size --d:release lock.nim
+nim c --cpu:amd64 --opt:size --d:release shock.nim
+nim c --cpu:amd64 --opt:size --d:release barrel.nim
+nim c --cpu:amd64 --opt:size --d:release trick.nim
+```
+
+
+In Linux, install the compiler, nim and the winim library:
+
+```
+sudo apt install mingw-w64
+curl https://nim-lang.org/choosenim/init.sh -sSf | sh
+source ~/.profile
+export PATH=$HOME/.nimble/bin:$PATH
+nimble install winim
+```
+
+Then cross-compile the binaries:
+
+```
+nim c --cpu:amd64 --opt:size --d:release --os:windows --gcc.exe:x86_64-w64-mingw32-gcc --gcc.linkerexe:x86_64-w64-mingw32-gcc lock.nim
+nim c --cpu:amd64 --opt:size --d:release --os:windows --gcc.exe:x86_64-w64-mingw32-gcc --gcc.linkerexe:x86_64-w64-mingw32-gcc shock.nim
+nim c --cpu:amd64 --opt:size --d:release --os:windows --gcc.exe:x86_64-w64-mingw32-gcc --gcc.linkerexe:x86_64-w64-mingw32-gcc barrel.nim
+nim c --cpu:amd64 --opt:size --d:release --os:windows --gcc.exe:x86_64-w64-mingw32-gcc --gcc.linkerexe:x86_64-w64-mingw32-gcc trick.nim
+```
