@@ -43,7 +43,7 @@ proc NtProtectVirtualMemory*(ProcessHandle: HANDLE, BaseAddress: ptr PVOID, Regi
 
 
 proc enableDebugPrivileges*() =
-  let currentProcess = GetCurrentProcess()
+  let currentProcess = cast[HANDLE](-1)
   var tokenHandle: HANDLE
 
   # Open process token
