@@ -12,28 +12,28 @@ nim c --cpu:amd64 --opt:size --d:release trick.nim
 You can run the programs separately and get 3 JSON files and 1 ZIP file:
 
 ```
-lock.exe  [-j JSON_NAME ] [-r]
+lock.exe  [-j:JSON_NAME ] [-r]
 ```
 
 ```
-shock.exe [-j JSON_NAME ] [-r]
+shock.exe [-j:JSON_NAME ] [-r]
 ```
 
 ```
-barrel.exe [-j JSON_NAME ] [-z ZIP_NAME] [-r]
+barrel.exe [-j:JSON_NAME ] [-z:ZIP_NAME] [-r]
 ```
 
-Options:
+The optional parameters are:
 
-- **JSON file name** (-j, optional): JSON file name
+- **-j**: JSON file name
 
-- **ZIP file name** (-z, optional): ZIP file name
+- **-z**: ZIP file name
 
-- **Remap ntdll** (-r, optional): Remap the ntdll.dll library
+- **-r**: Remap the ntdll.dll library
 
 <br>
 
-By default the programs do not remap the ntdll.dll and create the files "lock.json", "shock.json",  "barrel.json" and "barrel.zip":
+By default the programs do not remap the ntdll.dll library and create the files with the default names:
 
 ![img1](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/refs/heads/master/images/trickdump/Screenshot_nim1.png)
 
@@ -51,24 +51,18 @@ python3 create_dump.py [-l LOCK_JSON] [-s SHOCK_JSON] [-b BARREL_JSON] [-z BARRE
 
 -------------------------
 
-## Trick: All in one
+## Trick (All in one)
 
 If you prefer to execute only one binary, Trick generates a ZIP file containing the 3 JSON files and the ZIP file with the memory regions:
 
 ```
-trick.exe [-z ZIPNAME] [-r]
+trick.exe [-z:ZIPNAME] [-r]
 ```
 
-
-It creates the ZIP file locally, optionally using a ntdll.dll overwrite method:
+The optional parameters are the same:
 
 ![img4](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_nim4.png)
 
-
-With a ZIP file like this, you can unzip it and create the Minidump file using *create_dump.py* later:
+With a ZIP file like this, unzip it and create the Minidump file using *create_dump.py* later:
 
 ![img5](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_nim5.png)
-
-<br>
-
-Once you have the Minidump file, get the credentials using Mimikatz. Good luck! :)
