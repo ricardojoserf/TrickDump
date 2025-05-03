@@ -440,8 +440,7 @@ proc get_ntdll_from_debug_proc*(process_path: string): ptr uint8 =
         addr pi
     )
     if success == 0:
-        let err = GetLastError()
-        echo "[-] CreateProcess failed with error: 0x", toHex(err.uint32), " (", err, ")"
+        echo "[-] CreateProcess failed"
         quit(1)
 
     # Get ntdll.dll information from current process
