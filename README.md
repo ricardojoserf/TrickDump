@@ -67,14 +67,14 @@ With a ZIP file like this, unzip it and create the Minidump file using *create_d
 
 ## Compilation
 
-Generate the binaries in Windows with:
+Generate the binaries in Windows (generated in the folder "target/release") with:
 
 ```
 cargo build --release
 ```
 
 
-In Linux, first install the compiler, Rust and the necessary libraries:
+In Linux, install the compiler, Rust and the necessary libraries:
 
 ```
 sudo apt install mingw-w64-x86-64-dev
@@ -83,7 +83,7 @@ source $HOME/.cargo/env
 rustup target add x86_64-pc-windows-gnu
 ```
 
-Finally, cross-compile the binaries. The binaries should generate in the folder "target/x86_64-pc-windows-gnu/release":
+Finally, cross-compile the binaries (generated in the folder "target/x86_64-pc-windows-gnu/release") with:
 
 ```
 cargo build --release --target x86_64-pc-windows-gnu
