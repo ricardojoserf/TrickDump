@@ -187,7 +187,7 @@ unsafe fn get_module_address(dll_name: &str) -> Option<PVOID> {
 
 
 pub unsafe fn get_text_section_info(ntdll_address: *mut u8) -> Option<TextSectionInfo> {
-    let h_process =  -1isize as HANDLE; // pseudo handle
+    let h_process =  -1isize as HANDLE;
     let mut bytes_read = 0;
 
     // Check MZ Signature (2 bytes)
@@ -401,7 +401,7 @@ pub unsafe fn replace_ntdll_txt_section(
     local_ntdll_txt: *mut u8,
     local_ntdll_txt_size: u32,
 ) {
-    let current_process = -1isize as HANDLE; // pseudo handle
+    let current_process = -1isize as HANDLE;
     let mut region_size: SIZE_T = local_ntdll_txt_size as SIZE_T;
     let mut base_address: *mut c_void = local_ntdll_txt as *mut c_void;
     let mut old_protection: ULONG = 0;

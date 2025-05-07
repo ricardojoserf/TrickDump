@@ -107,14 +107,14 @@ fn enable_debug_privileges() -> Result<(), String> {
         );
 
         if !NT_SUCCESS(status) {
-            NtClose(token_handle as *mut winapi::ctypes::c_void); // CloseHandle(token_handle);
+            NtClose(token_handle as *mut winapi::ctypes::c_void);
             return Err(format!(
                 "[-] Error calling NtAdjustPrivilegesToken. NTSTATUS: 0x{:08X}",
                 status
             ));
         }
 
-        NtClose(token_handle as *mut winapi::ctypes::c_void); // CloseHandle(token_handle);
+        NtClose(token_handle as *mut winapi::ctypes::c_void);
         println!("[+] Debug privileges enabled successfully.");
         Ok(())
     }
@@ -276,10 +276,8 @@ unsafe fn custom_get_module_handle(h_process: HANDLE) -> Result<Vec<ModuleInform
     };
 
     while !dll_base.is_null() {
-        // Corrección clave: Ajustar el puntero SIN leer memoria
         let current_entry = next_flink as usize - 0x10;
         
-        // Leer campos desde la entrada actual
         dll_base = match read_remote_int_ptr(
             h_process, 
             ((next_flink as usize) + FLINK_DLLBASE_OFFSET) as PVOID
@@ -396,12 +394,11 @@ unsafe fn shock(h_process: HANDLE) -> String {
         let mut mbi: MEMORY_BASIC_INFORMATION = unsafe { std::mem::zeroed() };
         let mut return_size: usize = 0;
 
-        // If you defined the enum manually (Option 1 from previous answer):
         let ntstatus = unsafe {
             NtQueryVirtualMemory(
                 h_process,
                 mem_address,
-                MemoryInformationClass::MemoryBasicInformation,  // Use enum variant instead of 0
+                MemoryInformationClass::MemoryBasicInformation,
                 &mut mbi as *mut _ as PVOID,
                 std::mem::size_of::<MEMORY_BASIC_INFORMATION>(),
                 &mut return_size,
@@ -421,16 +418,10 @@ unsafe fn shock(h_process: HANDLE) -> String {
                     return Default::default();
                 }
             };
-            // let module_counter = modules.len();
             
             let module_found = find_module_by_name(modules, &aux_name);
-            // println!("[+] 0x{:X}\tmbi.Protect: 0x{:x}\tmbi.State: 0x{:x}\tmbi.RegionSize: 0x{:x}", mem_address as usize, mbi.Protect, mbi.State, mbi.RegionSize);
             
             if mbi.RegionSize == 0x1000 {
-                // println!("{}", aux_size);
-                // println!("{}", String::from_utf8_lossy(&aux_name[..aux_name.iter().position(|&x| x == 0).unwrap_or(aux_name.len())]));
-                // println!("[+] 0x{:X}\tmbi.Protect: 0x{:x}\tmbi.State: 0x{:x}\tmbi.RegionSize: 0x{:x}", mem_address as usize, mbi.Protect, mbi.State, mbi.RegionSize);
-
                 if mbi.BaseAddress != module_found.dll_base as *mut _ {
                     let aux_index = find_module_index_by_name(modules, &aux_name);
                     let mut updated_module = module_found.clone();
@@ -438,11 +429,11 @@ unsafe fn shock(h_process: HANDLE) -> String {
                     modules[aux_index] = updated_module;
                 }
 
-                // Buscar si la dirección actual corresponde a algún módulo
+                // Check if address corresponds to any module base address
                 for k in 0..(modules.len()) {
                     if let Some(module) = modules.get(k) {
                         if mbi.BaseAddress == module.dll_base as *mut _ {
-                            // Actualizar aux_name y aux_size
+                            // Update aux_name and aux_size
                             aux_name.copy_from_slice(&module.base_dll_name);
                             aux_size = mbi.RegionSize as i32;
                             break;
@@ -450,21 +441,17 @@ unsafe fn shock(h_process: HANDLE) -> String {
                     }
                 }
             } else {
-                // Incrementar tamaño si no es una nueva región
                 aux_size += mbi.RegionSize as i32;
             }
 
         }
         
-        // Move to next memory region
         mem_address = unsafe {
             (mbi.BaseAddress as *mut u8).add(mbi.RegionSize) as PVOID
         };
     }
 
-    // Generar el JSON
-    let mut json_output = String::new();
-    
+    let mut json_output = String::new();    
     if let Ok(modules) = module_list {
         for module in modules {
             let name = module.base_dll_name.iter()
@@ -486,7 +473,6 @@ unsafe fn shock(h_process: HANDLE) -> String {
         }
     }
 
-    // Formatear el resultado final
     if !json_output.is_empty() {
         format!("[{}]", json_output.trim_end_matches(','))
     } else {
@@ -494,26 +480,6 @@ unsafe fn shock(h_process: HANDLE) -> String {
     }
 }
 
-/*
-fn create_memory_zip(memfile_list: Vec<MemFile>, zip_path: &str) -> std::io::Result<()> {
-    // Create the ZIP file
-    let file = File::create(zip_path)?;
-    let mut zip = ZipWriter::new(file);
-
-    // Add each memory region to the ZIP
-    for memfile in memfile_list {
-        let options = FileOptions::default()
-            .compression_method(zip::CompressionMethod::Stored);
-        
-        zip.start_file(memfile.filename, options)?;
-        zip.write_all(&memfile.content)?;
-    }
-
-    // Finalize the ZIP file
-    zip.finish()?;
-    Ok(())
-}
-*/
 
 unsafe fn barrel(h_process: HANDLE) -> Result<(String, Vec<MemFile>), String> {
     let proc_max_address_l: u64 = 0x7FFFFFFEFFFF;
@@ -655,7 +621,7 @@ unsafe fn get_module_address(dll_name: &str) -> Option<PVOID> {
 
 
 pub unsafe fn get_text_section_info(ntdll_address: *mut u8) -> Option<TextSectionInfo> {
-    let h_process = -1isize as HANDLE; // pseudo handle
+    let h_process = -1isize as HANDLE;
     let mut bytes_read = 0;
 
     // Check MZ Signature (2 bytes)
@@ -869,7 +835,7 @@ pub unsafe fn replace_ntdll_txt_section(
     local_ntdll_txt: *mut u8,
     local_ntdll_txt_size: u32,
 ) {
-    let current_process = -1isize as HANDLE; // pseudo handle
+    let current_process = -1isize as HANDLE;
     let mut region_size: SIZE_T = local_ntdll_txt_size as SIZE_T;
     let mut base_address: *mut c_void = local_ntdll_txt as *mut c_void;
     let mut old_protection: ULONG = 0;
