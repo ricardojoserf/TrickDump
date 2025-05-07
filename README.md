@@ -120,8 +120,4 @@ execute_bof trick_bof.o --format-string z <OVERWRITE_TECHNIQUE>
 
 ![img16](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF16.png)
 
-----------------------------------
-
-## ⭐ Support This Project by Starring the Repository!
-
-If you find this project helpful or interesting, please consider giving it a star 🌟 on GitHub!
+<br>
