@@ -4,17 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-winapi = { version = "0.3", features = [
-    "winbase",
-    "minwindef",
-    "winnt",
-    "libloaderapi",
-    "ntdef",
-    "processthreadsapi",
-    "basetsd",
-    "handleapi",
-    "minwinbase",
-    "memoryapi",
-] }
+winapi = { version = "0.3", features = ["winbase"] }
 zip = "0.6"
 clap = { version = "4.0", features = ["derive"] }
