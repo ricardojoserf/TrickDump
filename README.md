@@ -95,3 +95,5 @@ crystal build trick.cr --release
 ## References
 
 - [Crystal Malware](https://rastamouse.me/crystal-malware/) by [Rastamouse](https://twitter.com/_rastamouse)
+
+<br>
