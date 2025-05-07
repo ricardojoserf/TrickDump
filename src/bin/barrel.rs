@@ -16,7 +16,6 @@ use winapi::{
         ntdef::{HANDLE, LUID, NTSTATUS, PVOID, PWSTR, USHORT},
     },
     um::{
-        handleapi::CloseHandle,
         processthreadsapi::{
             CreateProcessW, PROCESS_INFORMATION, STARTUPINFOW,
         },
@@ -102,14 +101,14 @@ fn enable_debug_privileges() -> Result<(), String> {
         );
 
         if !NT_SUCCESS(status) {
-            CloseHandle(token_handle as *mut winapi::ctypes::c_void);
+            NtClose(token_handle as *mut winapi::ctypes::c_void);
             return Err(format!(
                 "[-] Error calling NtAdjustPrivilegesToken. NTSTATUS: 0x{:08X}",
                 status
             ));
         }
 
-        CloseHandle(token_handle as *mut winapi::ctypes::c_void);
+        NtClose(token_handle as *mut winapi::ctypes::c_void);
         println!("[+] Debug privileges enabled successfully.");
         Ok(())
     }
