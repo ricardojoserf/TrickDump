@@ -49,6 +49,9 @@ It is available in different languages:
 
 It will not work if PPL is enabled, ~~the PEB structure is unreadable~~ or the binaries are not compiled as 64-bit. **Update**: Now it is possible to execute the programs without reading the PEB, check the [peb-unreadable branch](https://github.com/ricardojoserf/TrickDump/tree/peb-unreadable) :)
 
+The technique works fine on the latest versions of Windows and has been tested against common AV and EDR solutions, but stealthiness will depend on the "flavour" you choose: use uncommon languages and customize the binaries for the best results!
+
+
 -------------------------
 
 ## Usage
