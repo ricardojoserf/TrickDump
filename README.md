@@ -45,7 +45,7 @@ It is available in different languages:
 - BOF files: The [bof-flavour branch](https://github.com/ricardojoserf/TrickDump/tree/bof-flavour)
 - Crystal: The [crystal-flavour branch](https://github.com/ricardojoserf/TrickDump/tree/crystal-flavour)
 - Nim: The [nim-flavour branch](https://github.com/ricardojoserf/TrickDump/tree/nim-flavour)
-
+- Rust: The [rust-flavour branch](https://github.com/ricardojoserf/TrickDump/tree/rust-flavour)
 
 It will not work if PPL is enabled, ~~the PEB structure is unreadable~~ or the binaries are not compiled as 64-bit. **Update**: Now it is possible to execute the programs without reading the PEB, check the [peb-unreadable branch](https://github.com/ricardojoserf/TrickDump/tree/peb-unreadable) :)
 
