@@ -3,11 +3,11 @@
 You can run the programs separately and get 3 JSON files and 1 ZIP file:
 
 ```
-lock.exe  [-j JSON_NAME ] [-r]
+lock.exe  [-j JSON_NAME] [-r]
 ```
 
 ```
-shock.exe [-j JSON_NAME ] [-r]
+shock.exe [-j JSON_NAME] [-r]
 ```
 
 ```
