@@ -65,5 +65,3 @@ You get a ZIP file like this, unzip it and create the Minidump file with the *cr
 For an alternative approach that creates a Minidump file directly, check out [NativeDump](https://github.com/ricardojoserf/NativeDump).
 
 If you like Golang, check the [golang-flavour](https://github.com/ricardojoserf/NativeDump/tree/golang-flavour) branch!
-
-<br>
