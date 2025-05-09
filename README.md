@@ -120,4 +120,12 @@ execute_bof trick_bof.o --format-string z <OVERWRITE_TECHNIQUE>
 
 ![img16](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_BOF16.png)
 
+----------------
+
+## NativeDump
+
+For an alternative approach that creates a Minidump file directly, check out [NativeDump](https://github.com/ricardojoserf/NativeDump).
+
+If you like BOF files, check the [bof-flavour](https://github.com/ricardojoserf/NativeDump/tree/bof-flavour) branch!
+
 <br>
