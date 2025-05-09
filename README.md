@@ -98,6 +98,9 @@ For an alternative approach that creates a Minidump file directly, check out [Na
 
 If you like Crystal, check the [crystal-flavour](https://github.com/ricardojoserf/NativeDump/tree/crystal-flavour) branch!
 
+<br>
+
+
 ------------------
 
 ## References
