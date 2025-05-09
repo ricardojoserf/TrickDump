@@ -90,3 +90,12 @@ nim c --cpu:amd64 --opt:size --d:release --os:windows --gcc.exe:x86_64-w64-mingw
 nim c --cpu:amd64 --opt:size --d:release --os:windows --gcc.exe:x86_64-w64-mingw32-gcc --gcc.linkerexe:x86_64-w64-mingw32-gcc barrel.nim
 nim c --cpu:amd64 --opt:size --d:release --os:windows --gcc.exe:x86_64-w64-mingw32-gcc --gcc.linkerexe:x86_64-w64-mingw32-gcc trick.nim
 ```
+
+
+----------------
+
+## NativeDump
+
+For an alternative approach that creates a Minidump file directly, check out [NativeDump](https://github.com/ricardojoserf/NativeDump).
+
+If you like Nim, check the [nim-flavour](https://github.com/ricardojoserf/NativeDump/tree/nim-flavour) branch!
