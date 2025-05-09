@@ -88,3 +88,10 @@ Finally, cross-compile the binaries (generated in the folder "target/x86_64-pc-w
 ```
 cargo build --release --target x86_64-pc-windows-gnu
 ```
+<br>
+
+----------------
+
+## NativeDump
+
+For an alternative approach that creates a Minidump file directly, check out [NativeDump](https://github.com/ricardojoserf/NativeDump).
