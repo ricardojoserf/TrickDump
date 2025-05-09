@@ -1,4 +1,4 @@
-# TrickDump - "python-flavour" branch
+# TrickDump - Python branch
 
 This branch implements the same functionality as the main branch but using Python3. As an addition, it allows to create the zip file with a password.
 
@@ -64,3 +64,11 @@ You can create the ZIP file locally, optionally using a Ntdll overwrite method:
 You get a ZIP file like this, unzip it and create the Minidump file with the *create_dump.py* script:
 
 ![img7](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_7.png)
+
+----------------
+
+## NativeDump
+
+For an alternative approach that creates a Minidump file directly, check out [NativeDump](https://github.com/ricardojoserf/NativeDump).
+
+If you like Python, check the [python-flavour](https://github.com/ricardojoserf/NativeDump/tree/python-flavour) branch!
