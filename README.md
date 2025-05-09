@@ -40,6 +40,8 @@ python3 create_dump.py [-l LOCK_JSON] [-s SHOCK_JSON] [-b BARREL_JSON] [-z BARRE
 
 ![img3](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/refs/heads/master/images/trickdump/Screenshot_nim3.png)
 
+<br>
+
 -------------------------
 
 ## Trick (All in one)
@@ -57,6 +59,9 @@ The optional parameters are the same:
 With a ZIP file like this, unzip it and create the Minidump file using *create_dump.py* later:
 
 ![img5](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_nim5.png)
+
+
+<br>
 
 -------------------------
 
@@ -91,6 +96,8 @@ nim c --cpu:amd64 --opt:size --d:release --os:windows --gcc.exe:x86_64-w64-mingw
 nim c --cpu:amd64 --opt:size --d:release --os:windows --gcc.exe:x86_64-w64-mingw32-gcc --gcc.linkerexe:x86_64-w64-mingw32-gcc trick.nim
 ```
 
+
+<br>
 
 ----------------
 
