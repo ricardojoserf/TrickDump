@@ -48,3 +48,13 @@ It creates the ZIP file locally, optionally using a ntdll.dll overwrite method:
 With a ZIP file like this, unzip it and create the Minidump file using *create_dump.py*:
 
 ![img7](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/master/images/trickdump/Screenshot_7.png)
+
+----------------
+
+## NativeDump
+
+For an alternative approach that creates a Minidump file directly, check out [NativeDump](https://github.com/ricardojoserf/NativeDump).
+
+If you like BOF files, check the [c-flavour](https://github.com/ricardojoserf/NativeDump/tree/c-flavour) branch!
+
+<br>
