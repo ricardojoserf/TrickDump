@@ -69,8 +69,9 @@ python3 create_dump.py -t trick.zip
 
 ![img4](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/refs/heads/master/images/trickdump/Screenshot_deno_4.png)
 
+
 ----------------
 
 ## NativeDump
 
-For an alternative approach that creates a Minidump file directly, check out [NativeDump](https://github.com/ricardojoserf/NativeDump).
+For an alternative approach that creates a Minidump file directly, check out [NativeDump](https://github.com/ricardojoserf/NativeDump/tree/deno-flavour).
