@@ -45,8 +45,6 @@ Then use the *create_dump.py* script to generate the Minidump file in the attack
 python3 create_dump.py [-l LOCK_JSON] [-s SHOCK_JSON] [-b BARREL_JSON] [-z BARREL_ZIP] [-o OUTPUT_FILE]
 ```
 
-![img3](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/refs/heads/master/images/trickdump/Screenshot_deno_3.png)
-
 -------------------------
 
 ## All in one
