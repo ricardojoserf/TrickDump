@@ -44,6 +44,7 @@ It is available in different languages:
 - C/C++:  The [c-flavour branch](https://github.com/ricardojoserf/TrickDump/tree/c-flavour)
 - BOF files: The [bof-flavour branch](https://github.com/ricardojoserf/TrickDump/tree/bof-flavour)
 - Crystal: The [crystal-flavour branch](https://github.com/ricardojoserf/TrickDump/tree/crystal-flavour)
+- Deno: The [deno-flavour branch](https://github.com/ricardojoserf/TrickDump/tree/deno-flavour)
 - Nim: The [nim-flavour branch](https://github.com/ricardojoserf/TrickDump/tree/nim-flavour)
 - Rust: The [rust-flavour branch](https://github.com/ricardojoserf/TrickDump/tree/rust-flavour)
 

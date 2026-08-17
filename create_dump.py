@@ -11,6 +11,8 @@ def get_args():
 	parser.add_argument('-s', '--shock_json',  required=False, default='shock.json', action='store', help='File path for shock.json')
 	parser.add_argument('-b', '--barrel_json', required=False, default='barrel.json', action='store', help='File path for barrel.json')
 	parser.add_argument('-z', '--barrel_zip',  required=False, default='barrel.zip', action='store', help='Zip file containing the regions memory dumps')
+	parser.add_argument('-d', '--barrel_directory', required=False, default='', action='store', help='Directory containing the regions memory dumps')
+	parser.add_argument('-t', '--trick_zip',  required=False, default='', action='store', help='Trick zip file containing lock.json, shock.json, barrel.json and barrel.zip')
 	parser.add_argument('-o', '--output_file', required=False, default='oogie.dmp', action='store', help='Dump file name')
 	my_args = parser.parse_args()
 	return my_args
@@ -22,7 +24,7 @@ def read_binary_file(file_path):
     return byte_array
 
 
-def get_dump_bytearr(lock_json, shock_json, barrel_json, zip_file):
+def get_dump_bytearr(lock_json, shock_json, barrel_json, zip_file, files_dir):
 	# Calculations
 	number_modules = str(len(shock_json))
 	modulelist_size = 4
@@ -76,7 +78,7 @@ def get_dump_bytearr(lock_json, shock_json, barrel_json, zip_file):
 	# ModuleListStream
 	modulelist_stream = int(number_modules).to_bytes(4, 'little') # NumberOfModules
 	pointer_index = 0x7c
-	pointer_index += len(modulelist_stream) # 4 
+	pointer_index += len(modulelist_stream) # 4
 	pointer_index += 108*int(number_modules)
 
 	for module in shock_json:
@@ -102,14 +104,22 @@ def get_dump_bytearr(lock_json, shock_json, barrel_json, zip_file):
 		memory64list_stream += int(mem64.get("field1"),16).to_bytes(8, 'little') # Mem64 Address
 		memory64list_stream += int(mem64.get("field2")).to_bytes(8, 'little')    # Mem64 Size
 
-	# Add memory regions from zip file
+	# Add memory regions
 	memory_bytearr = b''
 
-	with zipfile.ZipFile(zip_file, 'r') as zip_file_handle:
-		for file_info in zip_file_handle.infolist():
-			with zip_file_handle.open(file_info.filename) as file:
-				file_bytes = file.read()
+	if files_dir and os.path.exists(files_dir):
+		for f_path in os.listdir(files_dir):
+			try:
+				file_bytes = read_binary_file(os.path.join(files_dir, f_path))
 				memory_bytearr += file_bytes
+			except Exception as e:
+				print("[-] Error reading " + f_path + ": " + str(e))
+	else:
+		with zipfile.ZipFile(zip_file, 'r') as zip_file_handle:
+			for file_info in zip_file_handle.infolist():
+				with zip_file_handle.open(file_info.filename) as file:
+					file_bytes = file.read()
+					memory_bytearr += file_bytes
 
 	dump_file = header + stream_directory + systeminfo_stream + modulelist_stream + memory64list_stream + memory_bytearr
 	return dump_file
@@ -134,36 +144,59 @@ def show_banner():
 
 def main():
 	args = get_args()
-	lock_file = args.lock_json
-	shock_file = args.shock_json
-	barrel_file = args.barrel_json
-	memory_files = args.barrel_zip
+	trick_zip = args.trick_zip
 	output_file = args.output_file
 
 	show_banner()
 
-	# Generate JSON object from file
-	if os.path.exists(lock_file):
-		lock_json   = json.loads(open(lock_file).read().splitlines()[0])[0]
+	if trick_zip:
+		if not os.path.exists(trick_zip):
+			print("[-] File " + trick_zip + " not found")
+			sys.exit(0)
+		print("[+] Extracting from trick zip: " + trick_zip)
+		with zipfile.ZipFile(trick_zip, 'r') as tz:
+			lock_json   = json.loads(tz.read('lock.json').decode())[0]
+			shock_json  = json.loads(tz.read('shock.json').decode())
+			shock_json  = [obj for obj in shock_json if obj.get('field0') != ""]
+			barrel_json = json.loads(tz.read('barrel.json').decode())
+			barrel_zip_data = tz.read('barrel.zip')
+		import tempfile
+		tmp_barrel = os.path.join(tempfile.gettempdir(), 'barrel_tmp.zip')
+		with open(tmp_barrel, 'wb') as f:
+			f.write(barrel_zip_data)
+		dump_file = get_dump_bytearr(lock_json, shock_json, barrel_json, tmp_barrel, '')
+		os.remove(tmp_barrel)
 	else:
-		print("[-] File " + lock_file + " not found")
-		sys.exit(0)
-	if os.path.exists(shock_file):
-		shock_json  = json.loads(open(shock_file).read().splitlines()[0])
-		shock_json = [obj for obj in shock_json if obj.get('field0') != ""]
-	else:
-		print("[-] File " + shock_file + " not found")
-		sys.exit(0)
-	if os.path.exists(barrel_file):
-		barrel_json = json.loads(open(barrel_file).read().splitlines()[0])
-	else:
-		print("[-] File " + barrel_file + " not found")
-		sys.exit(0)
-	if not os.path.exists(memory_files):
-		print("[-] File or Directory " + memory_files + " not found")
-		sys.exit(0)
+		lock_file = args.lock_json
+		shock_file = args.shock_json
+		barrel_file = args.barrel_json
+		zip_file = args.barrel_zip
+		files_dir = args.barrel_directory
 
-	dump_file = get_dump_bytearr(lock_json, shock_json, barrel_json, memory_files)
+		if os.path.exists(lock_file):
+			lock_json   = json.loads(open(lock_file).read().splitlines()[0])[0]
+		else:
+			print("[-] File " + lock_file + " not found")
+			sys.exit(0)
+		if os.path.exists(shock_file):
+			shock_json  = json.loads(open(shock_file).read().splitlines()[0])
+			shock_json = [obj for obj in shock_json if obj.get('field0') != ""]
+		else:
+			print("[-] File " + shock_file + " not found")
+			sys.exit(0)
+		if os.path.exists(barrel_file):
+			barrel_json = json.loads(open(barrel_file).read().splitlines()[0])
+		else:
+			print("[-] File " + barrel_file + " not found")
+			sys.exit(0)
+		if files_dir and os.path.exists(files_dir):
+			pass
+		elif not os.path.exists(zip_file):
+			print("[-] File " + zip_file + " not found")
+			sys.exit(0)
+
+		dump_file = get_dump_bytearr(lock_json, shock_json, barrel_json, zip_file, files_dir)
+
 	create_file(output_file, dump_file)
 	print("[+] Dump file " + output_file + " created ")
 
